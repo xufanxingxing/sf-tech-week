@@ -1,0 +1,71 @@
+-- Tech Week 去哪儿：在 Supabase 的 SQL Editor 里整段运行一次。
+
+create table public.events (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(name) between 1 and 120),
+  link text not null check (link ~* '^https?://' and char_length(link) <= 500),
+  date date not null,
+  start_time time not null,
+  end_time time,
+  location text not null check (char_length(location) between 1 and 200),
+  why text not null check (char_length(why) between 1 and 600),
+  added_by text not null check (char_length(added_by) between 1 and 30),
+  curated boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create table public.rsvps (
+  id bigint generated always as identity primary key,
+  event_id uuid not null references public.events(id) on delete cascade,
+  person_key text not null check (char_length(person_key) between 16 and 64),
+  name text not null check (char_length(name) between 1 and 30),
+  created_at timestamptz not null default now(),
+  unique (event_id, person_key)
+);
+
+alter table public.events enable row level security;
+alter table public.rsvps enable row level security;
+
+-- 访客可以看活动、加活动（不能自己标“群主推荐”），不能改、不能删。
+revoke all on public.events from anon, authenticated;
+grant select, insert on public.events to anon;
+create policy "anyone reads events" on public.events for select to anon using (true);
+create policy "anyone adds events" on public.events for insert to anon with check (curated = false);
+
+-- 访客能看到谁要去，但看不到 person_key，所以不能替别人取消。
+revoke all on public.rsvps from anon, authenticated;
+grant select (id, event_id, name, created_at) on public.rsvps to anon;
+create policy "anyone reads rsvps" on public.rsvps for select to anon using (true);
+
+create function public.set_going(p_event uuid, p_key text, p_name text, p_going boolean)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if p_going then
+    insert into rsvps (event_id, person_key, name) values (p_event, p_key, btrim(p_name))
+    on conflict (event_id, person_key) do update set name = excluded.name;
+  else
+    delete from rsvps where event_id = p_event and person_key = p_key;
+  end if;
+end $$;
+
+create function public.my_events(p_key text)
+returns setof uuid language sql stable security definer set search_path = public as $$
+  select event_id from rsvps where person_key = p_key
+$$;
+
+create function public.rename_me(p_key text, p_name text)
+returns void language sql security definer set search_path = public as $$
+  update rsvps set name = btrim(p_name) where person_key = p_key
+$$;
+
+revoke execute on function public.set_going, public.my_events, public.rename_me from public;
+grant execute on function public.set_going, public.my_events, public.rename_me to anon;
+
+-- 群主预选的活动
+insert into public.events (name, link, date, start_time, end_time, location, why, added_by, curated) values
+('Taiwan × Silicon Valley: Founders, Capital & the Next Wave of Innovation', 'https://partiful.com/e/jvRWNlc4IBvo2E1k7Rpj', '2026-10-05', '13:00', '17:00', 'San Francisco（具体地址报名通过后显示）', 'Startup Island TAIWAN 硅谷中心和 Taiwan Global Angels 主办，Google Cloud 合作。硅谷投资人、连续创业者和台湾背景创始人聊 AI、deep tech、医疗和硬件，有每家 5 分钟的 startup pitch，之后可以直接和 VC、天使投资人交流。', '小Linda', true),
+('Fireworks x a16z: Official Tech Week Kickoff w/ Vercel, ElevenLabs & Stripe', 'https://partiful.com/e/Fp4oMyFGQC6HzotKXc8T', '2026-10-05', '18:00', '22:00', 'San Francisco rooftop（具体地址报名通过后显示）', 'Tech Week 官方开幕派对，Fireworks 和 a16z 主办，Vercel、ElevenLabs、Stripe 支持。露台、天际线、现场音乐，来的是创始人、工程师、投资人和 operator，是第一晚认识人的最好场合。', '小Linda', true),
+('Claude Founder House（10/6–10/8 连续三天）', 'https://partiful.com/e/XaBTYkfWChPrquuI6uPH', '2026-10-06', '11:00', '17:00', 'San Francisco（具体地址报名通过后显示）', 'Anthropic 在 Tech Week 的大本营，周二到周四每天开放。白天是 Claude Cafe，可以和 Anthropic 团队一起干活、约 office hours、见投资人；每天 11:30–16:00 有 panel 和 workshop，话题包括 AI agents、机器人、融资、医疗 AI 和消费产品。', '小Linda', true),
+('Google for Startups & NVIDIA: From Compute to Competitive Moats', 'https://partiful.com/e/MXd2fC8umpyvOwQ3KP3S', '2026-10-07', '09:30', '12:00', 'Google for Startups Hub, San Francisco（具体地址报名通过后显示）', 'Google for Startups 和 NVIDIA 合办。NVIDIA 的 Jen Hoskins 和 SandboxAQ 的 Dr. Arman Zaribafiyan 讲 Quantum-AI 和高速推理，另有 agentic AI 安全、怎么建立护城河的 session，现场有专家答疑区和 live demo。', '小Linda', true),
+('3M to 100M Users: How Gamma Actually Did It', 'https://partiful.com/e/3OvkylJXptvhiEVFZ5wq', '2026-10-08', '10:00', '12:00', 'San Francisco（具体地址报名通过后显示）', 'Gamma 创始人 Grant Lee 亲自讲怎么靠 creator / influencer 营销做到 1 亿用户。先是 Wispr Flow、Gamma、Demi.ai 的 panel 聊高速增长的 AI 公司怎么做 influencer，再是 Grant Lee 的 fireside。适合想学增长打法的 AI 创始人和 operator。', '小Linda', true),
+('Anthropic IPO: What Matters for Valuation', 'https://partiful.com/e/7gkEjmj2RQD6b0Tx4J0p', '2026-10-08', '10:30', '11:30', 'San Francisco（具体地址报名通过后显示）', 'Elsa Capital 管理合伙人 Sarah Fu 主讲的小范围讨论。她做过 Fidelity 机构投资、Morgan Stanley 投行和 Stripe，讲大机构买方怎么看估值、投行怎么讲 IPO 故事、头条数字之外该问什么。名额有限，逐个审批。', '小Linda', true);
