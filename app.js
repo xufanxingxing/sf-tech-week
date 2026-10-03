@@ -27,7 +27,7 @@ const state = {
   added: new Set(),    // ids of events this browser added, which it may delete
   confirming: null,    // event id awaiting delete confirmation
   myComments: new Set(), // ids of comments this browser wrote
-  open: new Set(),     // card keys whose comments are expanded
+  drawer: null,        // id of the event whose comments panel is open
   drafts: new Map(),   // event id -> unsent comment text
   filter: "all",
   name: store.get("tw.name") || "",
@@ -60,7 +60,9 @@ function toast(msg) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 3500);
 }
 
-function render() {
+function render() { renderList(); renderDrawer(); }
+
+function renderList() {
   $("#tabAll").setAttribute("aria-pressed", state.filter === "all");
   $("#tabMine").setAttribute("aria-pressed", state.filter === "mine");
   $("#addBtn").disabled = state.status !== "ready";
@@ -102,7 +104,7 @@ function render() {
       section = h("section", { class: "day" }, h("h2", {}, l.main, h("small", { text: l.sub })));
       list.append(section);
     }
-    section.append(h("div", { class: "erow" }, card(ev, s, i), commentsBlock(ev, ev.id + ":" + i)));
+    section.append(card(ev, s, i));
   }
 }
 
@@ -114,6 +116,7 @@ function icon(d) {
   return svg;
 }
 const PIN = "M8 14.5s4.5-4 4.5-7.5a4.5 4.5 0 0 0-9 0c0 3.500 4.500 7.500 4.500 7.500ZM8 8.500a1.500 1.500 0 1 0 0-3 1.500 1.500 0 0 0 0 3Z";
+const BUBBLE = "M8 2.500c-3.300 0-6 2.200-6 5 0 1.300.6 2.500 1.600 3.400L3 13.500l2.900-1.200c.7.200 1.400.300 2.100.300 3.300 0 6-2.200 6-5s-2.700-5.100-6-5.100Z";
 const PERSON = "M8 8a2.750 2.750 0 1 0 0-5.500A2.750 2.750 0 0 0 8 8ZM2.750 13.500c.6-2.200 2.700-3.500 5.250-3.500s4.650 1.300 5.250 3.500";
 
 function card(ev, s, i) {
@@ -135,6 +138,7 @@ function card(ev, s, i) {
         STATUSES.map((st) => h("button", { class: "btn go", type: "button", "aria-pressed": String(mine === st.key),
           disabled: state.busy.has(ev.id), text: st.label, onclick: () => setStatus(ev, st.key) })),
         h("span", { class: "spacer" }),
+        commentButton(ev),
         state.added.has(ev.id) ? h("button", { class: "link del" + (sure ? " sure" : ""), type: "button",
           text: sure ? "确定删除？再点一次" : "删除", onclick: () => removeEvent(ev) }) : null,
       ),
@@ -155,36 +159,52 @@ function stamp(iso) {
   return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-function commentsBlock(ev, key) {
-  // Beside the card on wide screens (always visible); under it on phones, behind a toggle.
-  const open = state.open.has(key), n = ev.comments.length;
-  const toggle = h("button", { class: "btn ctoggle", type: "button", "aria-expanded": String(open),
-    text: n ? `留言 ${n}` : "留言", onclick: () => { open ? state.open.delete(key) : state.open.add(key); render(); } });
-  const input = h("input", { class: "cinput", id: "c-" + key, "data-key": key, maxlength: "300", placeholder: "写一句留言…", "aria-label": "留言", value: state.drafts.get(ev.id) || "" });
-  input.addEventListener("input", () => state.drafts.set(ev.id, input.value));
-  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); sendComment(ev, key); } });
-  return h("aside", { class: "cside" + (open ? " open" : ""), "aria-label": "留言" }, toggle,
-    h("div", { class: "cbody" },
-      h("div", { class: "chead", text: n ? `留言 ${n}` : "留言" }),
-      ev.comments.map((c) => h("div", { class: "comment" },
-        h("div", {}, h("strong", { text: c.name }), h("span", { class: "ctime", text: stamp(c.created_at) }),
-          state.myComments.has(c.id) ? h("button", { class: "link cdel", type: "button", text: "删除", onclick: () => removeComment(c) }) : null),
-        h("p", { text: c.body }))),
-      h("div", { class: "cform" }, input, h("button", { class: "btn", type: "button", text: "发送", onclick: () => sendComment(ev, key) })),
-    ),
-  );
+function commentButton(ev) {
+  const n = ev.comments.length, open = state.drawer === ev.id;
+  return h("button", { class: "cbtn" + (n ? " has" : ""), type: "button", "aria-expanded": String(open),
+    "aria-label": n ? `留言，${n} 条` : "留言", title: "留言", onclick: () => openDrawer(open ? null : ev.id) },
+    icon(BUBBLE), n ? h("span", { text: String(n) }) : null);
 }
 
-async function sendComment(ev, key) {
-  const body = (state.drafts.get(ev.id) || "").trim();
-  if (!body) return;
-  if (!state.name) { askName(() => sendComment(ev, key)); return; }
-  const { error } = await sb.rpc("techweek_add_comment", { p_event: ev.id, p_key: state.key, p_name: state.name, p_body: body });
-  if (error) { toast("留言没发出去，请再试一次。"); return; }
-  state.drafts.delete(ev.id);
-  await refresh();
-  document.querySelector(`[data-key="${key}"]`)?.focus();
+function openDrawer(id) {
+  const input = $("#dInput");
+  if (state.drawer) state.drafts.set(state.drawer, input.value);
+  state.drawer = id;
+  input.value = id ? state.drafts.get(id) || "" : "";
+  render();
+  if (id) input.focus();
 }
+
+// The panel's input lives outside the list so refreshes never touch what is being typed.
+function renderDrawer() {
+  const ev = state.events.find((e) => e.id === state.drawer);
+  $("#drawer").hidden = !ev;
+  if (!ev) { state.drawer = null; return; }
+  $("#dTitle").textContent = `留言 (${ev.comments.length})`;
+  $("#dEvent").textContent = ev.name;
+  $("#dName").textContent = state.name || "还没填名字";
+  $("#dList").replaceChildren(...(ev.comments.length ? [...ev.comments].reverse().map((c) => h("div", { class: "comment" },
+    h("div", {}, h("strong", { text: c.name }), h("span", { class: "ctime", text: stamp(c.created_at) }),
+      state.myComments.has(c.id) ? h("button", { class: "link cdel", type: "button", text: "删除", onclick: () => removeComment(c) }) : null),
+    h("p", { text: c.body }))) : [h("p", { class: "cnone", text: "还没有留言，写下第一条。" })]));
+}
+
+async function sendComment() {
+  const input = $("#dInput"), id = state.drawer, body = input.value.trim();
+  if (!id || !body) { input.focus(); return; }
+  if (!state.name) { askName(() => sendComment()); return; }
+  $("#dSend").disabled = true;
+  const { error } = await sb.rpc("techweek_add_comment", { p_event: id, p_key: state.key, p_name: state.name, p_body: body });
+  $("#dSend").disabled = false;
+  if (error) { toast("留言没发出去，请再试一次。"); return; }
+  input.value = ""; state.drafts.delete(id);
+  await refresh();
+  input.focus();
+}
+$("#dSend").onclick = sendComment;
+$("#dClose").onclick = () => openDrawer(null);
+$("#dInput").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendComment(); } });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.drawer && !document.querySelector("dialog[open]")) openDrawer(null); });
 
 async function removeComment(c) {
   const { data, error } = await sb.rpc("techweek_delete_comment", { p_id: c.id, p_key: state.key });
@@ -371,7 +391,7 @@ function boot() {
   sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, { auth: { persistSession: false } });
   refresh();
   // Other people's changes show up within 20 seconds, or as soon as the tab is looked at again.
-  setInterval(() => { if (!document.hidden && !document.activeElement?.matches(".cinput")) refresh(); }, 20000);
+  setInterval(() => { if (!document.hidden) refresh(); }, 20000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
 }
 boot();
