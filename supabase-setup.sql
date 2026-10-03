@@ -20,6 +20,7 @@ create table public.techweek_rsvps (
   event_id uuid not null references public.techweek_events(id) on delete cascade,
   person_key text not null check (char_length(person_key) between 16 and 64),
   name text not null check (char_length(name) between 1 and 30),
+  status text not null default 'going' check (status in ('going', 'pending', 'interested')),
   created_at timestamptz not null default now(),
   unique (event_id, person_key)
 );
@@ -36,23 +37,23 @@ create policy "anyone adds events" on public.techweek_events for insert to anon 
 
 -- 访客能看到谁要去，但看不到 person_key，所以不能替别人取消。
 revoke all on public.techweek_rsvps from anon, authenticated;
-grant select (id, event_id, name, created_at) on public.techweek_rsvps to anon;
+grant select (id, event_id, name, status, created_at) on public.techweek_rsvps to anon;
 create policy "anyone reads rsvps" on public.techweek_rsvps for select to anon using (true);
 
-create function public.techweek_set_going(p_event uuid, p_key text, p_name text, p_going boolean)
+create function public.techweek_set_status(p_event uuid, p_key text, p_name text, p_status text)
 returns void language plpgsql security definer set search_path = public as $$
 begin
-  if p_going then
-    insert into techweek_rsvps (event_id, person_key, name) values (p_event, p_key, btrim(p_name))
-    on conflict (event_id, person_key) do update set name = excluded.name;
-  else
+  if p_status is null then
     delete from techweek_rsvps where event_id = p_event and person_key = p_key;
+  else
+    insert into techweek_rsvps (event_id, person_key, name, status) values (p_event, p_key, btrim(p_name), p_status)
+    on conflict (event_id, person_key) do update set name = excluded.name, status = excluded.status;
   end if;
 end $$;
 
-create function public.techweek_my_events(p_key text)
-returns setof uuid language sql stable security definer set search_path = public as $$
-  select event_id from techweek_rsvps where person_key = p_key
+create function public.techweek_my_rsvps(p_key text)
+returns table (event_id uuid, status text) language sql stable security definer set search_path = public as $$
+  select r.event_id, r.status from techweek_rsvps r where r.person_key = p_key
 $$;
 
 create function public.techweek_rename_me(p_key text, p_name text)
@@ -72,8 +73,8 @@ begin
   return found;
 end $$;
 
-revoke execute on function public.techweek_set_going, public.techweek_my_events, public.techweek_rename_me, public.techweek_my_added, public.techweek_delete_event from public;
-grant execute on function public.techweek_set_going, public.techweek_my_events, public.techweek_rename_me, public.techweek_my_added, public.techweek_delete_event to anon;
+revoke execute on function public.techweek_set_status, public.techweek_my_rsvps, public.techweek_rename_me, public.techweek_my_added, public.techweek_delete_event from public;
+grant execute on function public.techweek_set_status, public.techweek_my_rsvps, public.techweek_rename_me, public.techweek_my_added, public.techweek_delete_event to anon;
 
 -- 群主预选的活动
 insert into public.techweek_events (name, link, date, start_time, end_time, location, why, added_by, curated) values
