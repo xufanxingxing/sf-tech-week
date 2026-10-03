@@ -29,8 +29,8 @@ body { margin: 0; }
   --pick-soft: #fceaf0;
   --danger: #b3261e;
   --shadow: 0 1px 4px rgba(19, 21, 23, .03);
-  --display: -apple-system, BlinkMacSystemFont, "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
-  --body: -apple-system, BlinkMacSystemFont, "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --display: system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --body: system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   --mono: var(--body);
 }
 @media (prefers-color-scheme: dark) {
@@ -49,7 +49,7 @@ body { margin: 0; }
 }
 
 * { box-sizing: border-box; }
-body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.5; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
 .wrap { max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 80px; display: flex; flex-direction: column; gap: 20px; }
 button, input, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
@@ -57,7 +57,7 @@ button { cursor: pointer; }
 
 /* Header */
 .top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
-.top h1 { font-family: var(--display); font-weight: 700; font-size: clamp(24px, 5vw, 30px); line-height: 1.2; margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+.top h1 { font-family: var(--display); font-weight: 700; font-size: clamp(24px, 5vw, 30px); line-height: 1.25; margin: 0; text-wrap: balance; }
 .top h1 { display: flex; align-items: center; gap: 12px; }
 .top h1 span { min-width: 0; }
 .logo { flex: none; width: 40px; height: 40px; border-radius: 10px; background: #fff; padding: 4px; box-sizing: border-box; object-fit: contain; }
@@ -96,7 +96,7 @@ button { cursor: pointer; }
 .where, .by { color: var(--muted); font-size: 15px; overflow-wrap: anywhere; display: flex; gap: 6px; align-items: flex-start; }
 .where { color: var(--faint); }
 .where svg, .by svg { flex: none; width: 15px; height: 15px; margin-top: 4px; }
-.why { margin: 4px 0 2px; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; white-space: pre-wrap; }
+.why { margin: 4px 0 2px; font-size: 14px; line-height: 1.65; color: var(--muted); overflow-wrap: anywhere; white-space: pre-wrap; }
 .why::before { content: "为什么值得去"; display: block; font-size: 12px; font-weight: 500; color: var(--faint); margin-bottom: 1px; }
 
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
@@ -113,6 +113,16 @@ a.btn { text-decoration: none; color: var(--fg); }
 .chip { background: var(--accent-soft); border: 1px solid transparent; border-radius: 6px; padding: 1px 8px; font-size: 13px; max-width: 100%; overflow-wrap: anywhere; }
 .chip.mine { background: var(--tint); border-color: var(--tint-line); color: var(--tint-fg); font-weight: 500; }
 
+.comments { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.ctoggle { align-self: flex-start; font-size: 13px; color: var(--muted); text-decoration: none; }
+.ctoggle:hover { color: var(--fg); }
+.comment { font-size: 14px; }
+.comment strong { font-weight: 600; }
+.comment p { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.ctime { color: var(--faint); font-size: 12px; margin-left: 8px; }
+.cdel { font-size: 12px; color: var(--faint); margin-left: 8px; }
+.cform { display: flex; gap: 8px; }
+.cinput { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 6px 10px; font-size: 14px; }
 .empty { text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; padding: 40px 16px; }
 .empty strong { display: block; color: var(--fg); font-size: 17px; margin-bottom: 4px; }
 
@@ -205,7 +215,7 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
 <div id="toast" role="status" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=10"></script>
-<script src="app.js?v=10"></script>
+<script src="config.js?v=11"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>

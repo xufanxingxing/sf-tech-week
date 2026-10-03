@@ -26,6 +26,9 @@ const state = {
   mine: new Map(),     // event id -> this browser's status on it
   added: new Set(),    // ids of events this browser added, which it may delete
   confirming: null,    // event id awaiting delete confirmation
+  myComments: new Set(), // ids of comments this browser wrote
+  open: new Set(),     // card keys whose comments are expanded
+  drafts: new Map(),   // event id -> unsent comment text
   filter: "all",
   name: store.get("tw.name") || "",
   key: store.get("tw.key"),
@@ -143,14 +146,54 @@ function card(ev, s, i) {
           return h("span", { class: "chip" + (isMe ? " mine" : ""), text: person.name });
         }),
       ))) : null,
+      commentsBlock(ev, ev.id + ":" + i),
     ),
   );
 }
 
-async function fetchAllRsvps() {
+function stamp(iso) {
+  const d = new Date(iso), p = (n) => String(n).padStart(2, "0");
+  return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function commentsBlock(ev, key) {
+  const open = state.open.has(key), n = ev.comments.length;
+  const toggle = h("button", { class: "link ctoggle", type: "button", "aria-expanded": String(open),
+    text: n ? `留言 ${n}` : "留言", onclick: () => { open ? state.open.delete(key) : state.open.add(key); render(); if (!open) document.querySelector(`[data-key="${key}"]`)?.focus(); } });
+  if (!open) return h("div", { class: "comments" }, toggle);
+  const input = h("input", { class: "cinput", id: "c-" + key, "data-key": key, maxlength: "300", placeholder: "写一句留言…", "aria-label": "留言", value: state.drafts.get(ev.id) || "" });
+  input.addEventListener("input", () => state.drafts.set(ev.id, input.value));
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); sendComment(ev, key); } });
+  return h("div", { class: "comments" }, toggle,
+    ev.comments.map((c) => h("div", { class: "comment" },
+      h("div", {}, h("strong", { text: c.name }), h("span", { class: "ctime", text: stamp(c.created_at) }),
+        state.myComments.has(c.id) ? h("button", { class: "link cdel", type: "button", text: "删除", onclick: () => removeComment(c) }) : null),
+      h("p", { text: c.body }))),
+    h("div", { class: "cform" }, input, h("button", { class: "btn", type: "button", text: "发送", onclick: () => sendComment(ev, key) })),
+  );
+}
+
+async function sendComment(ev, key) {
+  const body = (state.drafts.get(ev.id) || "").trim();
+  if (!body) return;
+  if (!state.name) { askName(() => sendComment(ev, key)); return; }
+  const { error } = await sb.rpc("techweek_add_comment", { p_event: ev.id, p_key: state.key, p_name: state.name, p_body: body });
+  if (error) { toast("留言没发出去，请再试一次。"); return; }
+  state.drafts.delete(ev.id);
+  await refresh();
+  document.querySelector(`[data-key="${key}"]`)?.focus();
+}
+
+async function removeComment(c) {
+  const { data, error } = await sb.rpc("techweek_delete_comment", { p_id: c.id, p_key: state.key });
+  if (error || !data) toast("没删掉，请再试一次。");
+  await refresh();
+}
+
+async function fetchAll(table, columns) {
   const rows = [];
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await sb.from("techweek_rsvps").select("id,event_id,name,status").order("id").range(from, from + 999);
+    const { data, error } = await sb.from(table).select(columns).order("id").range(from, from + 999);
     if (error) throw error;
     rows.push(...data);
     if (data.length < 1000) return rows;
@@ -162,17 +205,24 @@ async function refresh() {
   if (refreshing) return;
   refreshing = true;
   try {
-    const [ev, rsvps, mine, added] = await Promise.all([
+    const [ev, rsvps, mine, added, comments, myComments] = await Promise.all([
       sb.from("techweek_events").select("id,name,link,date,start_time,end_time,extra_dates,location,why,added_by,curated").order("date").order("start_time").order("name"),
-      fetchAllRsvps(),
+      fetchAll("techweek_rsvps", "id,event_id,name,status"),
       sb.rpc("techweek_my_rsvps", { p_key: state.key }),
       sb.rpc("techweek_my_added", { p_key: state.key }),
+      fetchAll("techweek_comments", "id,event_id,name,body,created_at"),
+      sb.rpc("techweek_my_comments", { p_key: state.key }),
     ]);
     if (ev.error) throw ev.error;
     const byEvent = new Map();
     for (const r of rsvps) {
       if (!byEvent.has(r.event_id)) byEvent.set(r.event_id, []);
       byEvent.get(r.event_id).push({ name: r.name, status: r.status });
+    }
+    const notes = new Map();
+    for (const c of comments) {
+      if (!notes.has(c.event_id)) notes.set(c.event_id, []);
+      notes.get(c.event_id).push(c);
     }
     state.events = ev.data.map((e) => ({
       id: e.id, name: e.name, link: e.link,
@@ -181,9 +231,11 @@ async function refresh() {
           .map((x) => ({ date: x.date, start: x.start, end: TIME_RE.test(x.end) ? x.end : "" }))],
       where: e.location, why: e.why, addedBy: e.added_by, curated: e.curated,
       goers: byEvent.get(e.id) || [],
+      comments: notes.get(e.id) || [],
     }));
     if (!mine.error) state.mine = new Map(mine.data.map((r) => [r.event_id, r.status]));
     if (!added.error) state.added = new Set(added.data);
+    if (!myComments.error) state.myComments = new Set(myComments.data);
     state.status = "ready";
   } catch {
     if (state.status !== "ready") state.status = "unavailable";
@@ -201,7 +253,7 @@ function askName(then) {
 async function setName(name) {
   const changed = name !== state.name;
   state.name = name; store.set("tw.name", name); render();
-  if (!changed || !sb || !state.mine.size) return;
+  if (!changed || !sb) return;
   const { error } = await sb.rpc("techweek_rename_me", { p_key: state.key, p_name: name });
   if (error) toast("名字没改成功，请再试一次。");
   await refresh();
@@ -317,7 +369,7 @@ function boot() {
   sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, { auth: { persistSession: false } });
   refresh();
   // Other people's changes show up within 20 seconds, or as soon as the tab is looked at again.
-  setInterval(() => { if (!document.hidden) refresh(); }, 20000);
+  setInterval(() => { if (!document.hidden && !document.activeElement?.matches(".cinput")) refresh(); }, 20000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
 }
 boot();
