@@ -230,3 +230,7 @@ $$;
 revoke execute on function public.techweek_is_admin, public.techweek_request_admin from public;
 grant execute on function public.techweek_is_admin, public.techweek_request_admin to anon;
 
+
+-- 群主后来撤下的两个活动
+delete from public.techweek_events
+where link in ('https://partiful.com/e/con6v0i0cwPvODNG0l2T', 'https://partiful.com/e/jvRWNlc4IBvo2E1k7Rpj');
