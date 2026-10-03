@@ -77,6 +77,49 @@ end $$;
 revoke execute on function public.techweek_set_status, public.techweek_my_rsvps, public.techweek_rename_me, public.techweek_my_added, public.techweek_delete_event from public;
 grant execute on function public.techweek_set_status, public.techweek_my_rsvps, public.techweek_rename_me, public.techweek_my_added, public.techweek_delete_event to anon;
 
+-- 留言
+create table public.techweek_comments (
+  id bigint generated always as identity primary key,
+  event_id uuid not null references public.techweek_events(id) on delete cascade,
+  person_key text not null check (char_length(person_key) between 16 and 64),
+  name text not null check (char_length(name) between 1 and 30),
+  body text not null check (char_length(body) between 1 and 300),
+  created_at timestamptz not null default now()
+);
+
+alter table public.techweek_comments enable row level security;
+
+-- 访客能看留言，但看不到 person_key；发和删都走下面的函数，只能删自己的。
+revoke all on public.techweek_comments from anon, authenticated;
+grant select (id, event_id, name, body, created_at) on public.techweek_comments to anon;
+create policy "anyone reads comments" on public.techweek_comments for select to anon using (true);
+
+create function public.techweek_add_comment(p_event uuid, p_key text, p_name text, p_body text)
+returns void language sql security definer set search_path = public as $$
+  insert into techweek_comments (event_id, person_key, name, body) values (p_event, p_key, btrim(p_name), btrim(p_body))
+$$;
+
+create function public.techweek_delete_comment(p_id bigint, p_key text)
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  delete from techweek_comments where id = p_id and person_key = p_key;
+  return found;
+end $$;
+
+create function public.techweek_my_comments(p_key text)
+returns setof bigint language sql stable security definer set search_path = public as $$
+  select id from techweek_comments where person_key = p_key
+$$;
+
+create or replace function public.techweek_rename_me(p_key text, p_name text)
+returns void language sql security definer set search_path = public as $$
+  update techweek_rsvps set name = btrim(p_name) where person_key = p_key;
+  update techweek_comments set name = btrim(p_name) where person_key = p_key
+$$;
+
+revoke execute on function public.techweek_add_comment, public.techweek_delete_comment, public.techweek_my_comments from public;
+grant execute on function public.techweek_add_comment, public.techweek_delete_comment, public.techweek_my_comments to anon;
+
 -- 群主预选的活动
 insert into public.techweek_events (name, link, date, start_time, end_time, location, why, added_by, curated) values
 ('Taiwan × Silicon Valley: Founders, Capital & the Next Wave of Innovation', 'https://partiful.com/e/jvRWNlc4IBvo2E1k7Rpj', '2026-10-05', '13:00', '17:00', 'San Francisco（具体地址报名通过后显示）', 'Startup Island TAIWAN 硅谷中心和 Taiwan Global Angels 主办，Google Cloud 合作。硅谷投资人、连续创业者和台湾背景创始人聊 AI、deep tech、医疗和硬件，有每家 5 分钟的 startup pitch，之后可以直接和 VC、天使投资人交流。', '小Linda', true),
