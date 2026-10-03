@@ -40,6 +40,7 @@ const STATUSES = [
   { key: "pending", label: "等待通过" },
   { key: "interested", label: "感兴趣" },
 ];
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/, TIME_RE = /^\d{2}:\d{2}$/;
 const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 function dayLabel(iso) {
   const [y, m, d] = iso.split("-").map(Number);
@@ -79,7 +80,10 @@ function render() {
     ? `${state.events.length} 个活动 · ${people.size} 人已标记`
     : "SF Tech Week 值得去的活动，和群里谁会去。";
 
-  const shown = state.events.filter((ev) => state.filter === "all" || state.mine.has(ev.id));
+  const shown = state.events
+    .filter((ev) => state.filter === "all" || state.mine.has(ev.id))
+    .flatMap((ev) => ev.sessions.map((s, i) => ({ ev, s, i })))
+    .sort((x, y) => (x.s.date + x.s.start + x.ev.name).localeCompare(y.s.date + y.s.start + y.ev.name));
   if (!shown.length) {
     list.append(state.filter === "mine"
       ? h("div", { class: "empty" }, h("strong", { text: "你还没标记任何活动" }), "在“全部”里点“我会去”“等待通过”或“感兴趣”，这里就是你的日程。")
@@ -88,14 +92,14 @@ function render() {
   }
 
   let day = null, section = null;
-  for (const ev of shown) {
-    if (ev.date !== day) {
-      day = ev.date;
+  for (const { ev, s, i } of shown) {
+    if (s.date !== day) {
+      day = s.date;
       const l = dayLabel(day);
       section = h("section", { class: "day" }, h("h2", {}, l.main, h("small", { text: l.sub })));
       list.append(section);
     }
-    section.append(card(ev));
+    section.append(card(ev, s, i));
   }
 }
 
@@ -109,13 +113,14 @@ function icon(d) {
 const PIN = "M8 14.5s4.5-4 4.5-7.5a4.5 4.5 0 0 0-9 0c0 3.500 4.500 7.500 4.500 7.500ZM8 8.500a1.500 1.500 0 1 0 0-3 1.500 1.500 0 0 0 0 3Z";
 const PERSON = "M8 8a2.750 2.750 0 1 0 0-5.500A2.750 2.750 0 0 0 8 8ZM2.750 13.500c.6-2.200 2.700-3.500 5.250-3.500s4.650 1.300 5.250 3.500";
 
-function card(ev) {
+function card(ev, s, i) {
   const mine = state.mine.get(ev.id), url = safeUrl(ev.link);
   const sure = state.confirming === ev.id;
   let marked = false; // highlight one chip as "me"
   const groups = STATUSES.map((st) => ({ ...st, people: ev.goers.filter((g) => g.status === st.key) })).filter((g) => g.people.length);
   return h("article", { class: "event" },
-    h("div", { class: "time" }, h("b", { text: ev.start }), ev.end ? h("span", { text: "– " + ev.end }) : null),
+    h("div", { class: "time" }, h("b", { text: s.start }), s.end ? h("span", { text: "– " + s.end }) : null,
+      ev.sessions.length > 1 ? h("i", { text: `· 第 ${i + 1}/${ev.sessions.length} 天` }) : null),
     h("div", { class: "main" },
       h("div", { class: "head" },
         h("h3", {}, url ? h("a", { href: url, target: "_blank", rel: "noopener noreferrer", title: "打开报名页面" }, ev.name, h("span", { class: "ext", "aria-hidden": "true", text: " ↗" })) : ev.name),
@@ -158,7 +163,7 @@ async function refresh() {
   refreshing = true;
   try {
     const [ev, rsvps, mine, added] = await Promise.all([
-      sb.from("techweek_events").select("id,name,link,date,start_time,end_time,location,why,added_by,curated").order("date").order("start_time").order("name"),
+      sb.from("techweek_events").select("id,name,link,date,start_time,end_time,extra_dates,location,why,added_by,curated").order("date").order("start_time").order("name"),
       fetchAllRsvps(),
       sb.rpc("techweek_my_rsvps", { p_key: state.key }),
       sb.rpc("techweek_my_added", { p_key: state.key }),
@@ -170,8 +175,10 @@ async function refresh() {
       byEvent.get(r.event_id).push({ name: r.name, status: r.status });
     }
     state.events = ev.data.map((e) => ({
-      id: e.id, name: e.name, link: e.link, date: e.date,
-      start: e.start_time.slice(0, 5), end: e.end_time ? e.end_time.slice(0, 5) : "",
+      id: e.id, name: e.name, link: e.link,
+      sessions: [{ date: e.date, start: e.start_time.slice(0, 5), end: e.end_time ? e.end_time.slice(0, 5) : "" },
+        ...(Array.isArray(e.extra_dates) ? e.extra_dates : []).filter((x) => x && DATE_RE.test(x.date) && TIME_RE.test(x.start))
+          .map((x) => ({ date: x.date, start: x.start, end: TIME_RE.test(x.end) ? x.end : "" }))],
       where: e.location, why: e.why, addedBy: e.added_by, curated: e.curated,
       goers: byEvent.get(e.id) || [],
     }));
@@ -231,6 +238,23 @@ $("#addBtn").onclick = () => {
   $("#eventDlg").showModal();
   $("#fName").focus();
 };
+let dateSeq = 1;
+function addDateRow() {
+  if ($("#dates").children.length >= 7) { toast("最多 7 个日期。"); return; }
+  const n = ++dateSeq;
+  const row = h("div", { class: "row extra" },
+    h("div", { class: "field" }, h("input", { id: "fDate" + n, type: "date", "aria-label": "日期", required: true })),
+    h("div", { class: "field" }, h("input", { id: "fStart" + n, type: "time", "aria-label": "开始", required: true })),
+    h("div", { class: "field" }, h("input", { id: "fEnd" + n, type: "time", "aria-label": "结束，可不填" })),
+    h("button", { class: "link", type: "button", text: "移除", onclick: () => row.remove() }),
+  );
+  // Start from the first row's times: a multi-day event usually keeps the same hours.
+  row.querySelectorAll("input")[1].value = $("#fStart").value;
+  row.querySelectorAll("input")[2].value = $("#fEnd").value;
+  $("#dates").append(row);
+  row.querySelector("input").focus();
+}
+$("#addDate").onclick = addDateRow;
 $("#eventCancel").onclick = () => $("#eventDlg").close();
 $("#nameCancel").onclick = () => { afterName = null; $("#nameDlg").close(); };
 
@@ -254,16 +278,25 @@ $("#eventForm").addEventListener("submit", async (e) => {
 
   if (!v("#fName")) return fail("请填活动名称。", "#fName");
   if (!safeUrl(link)) return fail("报名链接不对，请粘贴完整的网址。", "#fLink");
-  if (!v("#fDate")) return fail("请选日期。", "#fDate");
-  if (!v("#fStart")) return fail("请填开始时间。", "#fStart");
-  if (v("#fEnd") && v("#fEnd") <= v("#fStart")) return fail("结束时间要晚于开始时间。", "#fEnd");
+  const sessions = [];
+  for (const row of $("#dates").children) {
+    const [d, st, en] = row.querySelectorAll("input");
+    const bad = (msg, el) => { err.textContent = msg; err.hidden = false; el.focus(); };
+    if (!d.value) return bad("请选日期。", d);
+    if (!st.value) return bad("请填开始时间。", st);
+    if (en.value && en.value <= st.value) return bad("结束时间要晚于开始时间。", en);
+    if (sessions.some((x) => x.date === d.value)) return bad("这个日期已经填过了。", d);
+    sessions.push({ date: d.value, start: st.value, end: en.value });
+  }
+  sessions.sort((x, y) => (x.date + x.start).localeCompare(y.date + y.start));
   if (!v("#fWhere")) return fail("请填地点。", "#fWhere");
   if (!v("#fWhy")) return fail("请写一句为什么值得去。", "#fWhy");
   if (!v("#fBy")) return fail("请填你的名字。", "#fBy");
 
   const save = $("#eventSave"); save.disabled = true; err.hidden = true;
   const { error } = await sb.from("techweek_events").insert({
-    name: v("#fName"), link: safeUrl(link), date: v("#fDate"), start_time: v("#fStart"), end_time: v("#fEnd") || null,
+    name: v("#fName"), link: safeUrl(link), date: sessions[0].date, start_time: sessions[0].start, end_time: sessions[0].end || null,
+    extra_dates: sessions.slice(1),
     location: v("#fWhere"), why: v("#fWhy"), added_by: v("#fBy"), added_key: state.key,
   });
   save.disabled = false;
@@ -271,6 +304,7 @@ $("#eventForm").addEventListener("submit", async (e) => {
   if (!state.name) setName(v("#fBy"));
   $("#eventDlg").close();
   for (const id of ["#fName", "#fLink", "#fDate", "#fStart", "#fEnd", "#fWhere", "#fWhy"]) $(id).value = "";
+  for (const row of [...$("#dates").querySelectorAll(".row.extra")]) row.remove();
   toast("已添加");
   refresh();
 });

@@ -83,6 +83,7 @@ button { cursor: pointer; }
 .event { background: var(--surface); border: 1px solid var(--card-line); border-radius: 12px; box-shadow: var(--shadow); padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 4px; }
 .time { color: var(--faint); font-size: 15px; font-variant-numeric: tabular-nums; display: flex; gap: 5px; }
 .time b { font-weight: 400; }
+.time i { font-style: normal; }
 .main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .head h3 { margin: 0; font-size: 17px; line-height: 1.35; font-weight: 600; overflow-wrap: anywhere; }
@@ -125,6 +126,9 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
 .field input, .field textarea { width: 100%; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 8px 10px; }
 .field textarea { resize: vertical; min-height: 84px; }
 .row { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 10px; }
+#dates { display: flex; flex-direction: column; gap: 8px; }
+.row.extra { grid-template-columns: 1.3fr 1fr 1fr auto; align-items: center; }
+.row.extra .link { font-size: 13px; color: var(--muted); }
 .err { color: var(--danger); font-size: 14px; }
 .foot { display: flex; justify-content: flex-end; gap: 8px; }
 
@@ -133,6 +137,7 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
 @media (max-width: 520px) {
   .row { grid-template-columns: 1fr 1fr; }
   .row .field:first-child { grid-column: 1 / -1; }
+  .row.extra { grid-template-columns: 1fr 1fr auto; }
 }
 </style>
 </head>
@@ -164,11 +169,14 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
     <p>任何人都可以加。五项都填好，大家才好判断要不要去。</p>
     <div class="field"><label for="fName">活动名称</label><input id="fName" maxlength="120" required></div>
     <div class="field"><label for="fLink">报名链接</label><input id="fLink" type="url" inputmode="url" placeholder="https://lu.ma/…" maxlength="500" required></div>
-    <div class="row">
-      <div class="field"><label for="fDate">日期</label><input id="fDate" type="date" required></div>
-      <div class="field"><label for="fStart">开始</label><input id="fStart" type="time" required></div>
-      <div class="field"><label for="fEnd">结束 <i>可不填</i></label><input id="fEnd" type="time"></div>
+    <div id="dates">
+      <div class="row">
+        <div class="field"><label for="fDate">日期</label><input id="fDate" type="date" required></div>
+        <div class="field"><label for="fStart">开始</label><input id="fStart" type="time" required></div>
+        <div class="field"><label for="fEnd">结束 <i>可不填</i></label><input id="fEnd" type="time"></div>
+      </div>
     </div>
+    <div><button class="link" type="button" id="addDate">＋ 添加日期</button></div>
     <div class="field"><label for="fWhere">地点</label><input id="fWhere" maxlength="200" placeholder="场地名或地址" required></div>
     <div class="field"><label for="fWhy">为什么值得去</label><textarea id="fWhy" maxlength="600" placeholder="谁办的、谁会来、能收获什么" required></textarea></div>
     <div class="field"><label for="fBy">你的名字</label><input id="fBy" maxlength="30" placeholder="群里大家认得的名字" required></div>
@@ -195,7 +203,7 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
 <div id="toast" role="status" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=7"></script>
-<script src="app.js?v=7"></script>
+<script src="config.js?v=8"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>
