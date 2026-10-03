@@ -440,6 +440,23 @@ $("#eventForm").addEventListener("submit", async (e) => {
   refresh();
 });
 
+// Opening the site at #admin asks to make this browser an admin; whoever runs the database approves it by the code shown.
+async function adminPairing() {
+  if (location.hash !== "#admin") return;
+  const box = $("#notice"), say = (msg) => { box.textContent = msg; box.hidden = false; };
+  const { data: isAdmin, error } = await sb.rpc("techweek_is_admin", { p_key: state.key });
+  if (error) return say("现在查不到管理员状态，请刷新再试。");
+  if (isAdmin) { store.set("tw.adminCode", ""); return say("这台浏览器是管理员：每个活动右下角都有“删除”，也可以删任何留言。"); }
+  let [code, at] = (store.get("tw.adminCode") || "").split(":");
+  if (!code || Date.now() - Number(at) > 20 * 60 * 1000) {
+    code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, "0");
+    const res = await sb.rpc("techweek_request_admin", { p_key: state.key, p_code: code, p_name: state.name });
+    if (res.error) return say("管理员申请没发出去，请刷新再试。");
+    store.set("tw.adminCode", code + ":" + Date.now());
+  }
+  say(`管理员配对码：${code}。把这 6 位数字发给管理网站的人，批准后刷新这个页面。`);
+}
+
 function boot() {
   render();
   const cfg = window.TECHWEEK_CONFIG || {};
@@ -447,6 +464,7 @@ function boot() {
   if (!window.supabase) { state.status = "unavailable"; render(); return; }
   sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, { auth: { persistSession: false } });
   refresh();
+  adminPairing();
   // Other people's changes show up within 20 seconds, or as soon as the tab is looked at again.
   setInterval(() => { if (!document.hidden) refresh(); }, 20000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
