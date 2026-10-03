@@ -122,7 +122,7 @@ function card(ev) {
 async function fetchAllRsvps() {
   const rows = [];
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await sb.from("rsvps").select("id,event_id,name").order("id").range(from, from + 999);
+    const { data, error } = await sb.from("techweek_rsvps").select("id,event_id,name").order("id").range(from, from + 999);
     if (error) throw error;
     rows.push(...data);
     if (data.length < 1000) return rows;
@@ -135,9 +135,9 @@ async function refresh() {
   refreshing = true;
   try {
     const [ev, rsvps, mine] = await Promise.all([
-      sb.from("events").select("*").order("date").order("start_time").order("name"),
+      sb.from("techweek_events").select("*").order("date").order("start_time").order("name"),
       fetchAllRsvps(),
-      sb.rpc("my_events", { p_key: state.key }),
+      sb.rpc("techweek_my_events", { p_key: state.key }),
     ]);
     if (ev.error) throw ev.error;
     const byEvent = new Map();
@@ -170,7 +170,7 @@ async function setName(name) {
   const changed = name !== state.name;
   state.name = name; store.set("tw.name", name); render();
   if (!changed || !sb || !state.mine.size) return;
-  const { error } = await sb.rpc("rename_me", { p_key: state.key, p_name: name });
+  const { error } = await sb.rpc("techweek_rename_me", { p_key: state.key, p_name: name });
   if (error) toast("名字没改成功，请再试一次。");
   await refresh();
 }
@@ -180,7 +180,7 @@ async function toggleGoing(ev) {
   if (state.busy.has(ev.id)) return;
   const going = !state.mine.has(ev.id);
   state.busy.add(ev.id); render();
-  const { error } = await sb.rpc("set_going", { p_event: ev.id, p_key: state.key, p_name: state.name, p_going: going });
+  const { error } = await sb.rpc("techweek_set_going", { p_event: ev.id, p_key: state.key, p_name: state.name, p_going: going });
   if (error) toast("没保存成功，请再试一次。");
   await refresh();
   state.busy.delete(ev.id); render();
@@ -225,7 +225,7 @@ $("#eventForm").addEventListener("submit", async (e) => {
   if (!v("#fBy")) return fail("请填你的名字。", "#fBy");
 
   const save = $("#eventSave"); save.disabled = true; err.hidden = true;
-  const { error } = await sb.from("events").insert({
+  const { error } = await sb.from("techweek_events").insert({
     name: v("#fName"), link: safeUrl(link), date: v("#fDate"), start_time: v("#fStart"), end_time: v("#fEnd") || null,
     location: v("#fWhere"), why: v("#fWhy"), added_by: v("#fBy"),
   });
