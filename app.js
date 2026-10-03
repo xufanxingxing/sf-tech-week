@@ -163,7 +163,7 @@ function commentButton(ev) {
   const n = ev.comments.length, open = state.drawer === ev.id;
   return h("button", { class: "cbtn" + (n ? " has" : ""), type: "button", "aria-expanded": String(open),
     "aria-label": n ? `留言，${n} 条` : "留言", title: "留言", onclick: () => openDrawer(open ? null : ev.id) },
-    icon(BUBBLE), n ? h("span", { text: String(n) }) : null);
+    icon(BUBBLE), h("span", { text: n ? `留言 ${n}` : "留言" }));
 }
 
 function openDrawer(id) {
