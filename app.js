@@ -179,6 +179,7 @@ function openDrawer(id) {
 function renderDrawer() {
   const ev = state.events.find((e) => e.id === state.drawer);
   $("#drawer").hidden = !ev;
+  document.body.classList.toggle("drawer-open", !!ev);
   if (!ev) { state.drawer = null; return; }
   $("#dTitle").textContent = `留言 (${ev.comments.length})`;
   $("#dEvent").textContent = ev.name;
