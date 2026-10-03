@@ -19,12 +19,14 @@ body { margin: 0; }
   --line: #e4e5e7;
   --card-line: #ffffff;
   --faint: #9a9c9f;
-  --link: #e64980;
-  --accent: #d6336c;
+  --tint: #fceaf0;
+  --tint-line: #f3c6d5;
+  --tint-fg: #a8325c;
+  --accent: #c2557a;
   --accent-fg: #ffffff;
   --accent-soft: #eef0f2;
-  --pick: #c2255c;
-  --pick-soft: #ffe6ee;
+  --pick: #a8325c;
+  --pick-soft: #fceaf0;
   --danger: #b3261e;
   --shadow: 0 1px 4px rgba(19, 21, 23, .03);
   --display: -apple-system, BlinkMacSystemFont, "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
@@ -34,14 +36,14 @@ body { margin: 0; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #131517; --surface: #1e2022; --fg: #f2f3f4; --muted: #9a9c9e; --line: #2e3033;
-    --accent: #f783ac; --accent-fg: #3a0a1c; --accent-soft: #2a2c2f; --card-line: #2e3033; --faint: #7d7f82; --link: #faa2c1;
+    --accent: #e08aa6; --accent-fg: #3a0a1c; --accent-soft: #2a2c2f; --card-line: #2e3033; --faint: #7d7f82; --tint: #3a1a27; --tint-line: #5c2a3d; --tint-fg: #f4a9c2;
     --pick: #f9a8c4; --pick-soft: #3d1626; --danger: #f2877f;
     --shadow: none; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #131517; --surface: #1e2022; --fg: #f2f3f4; --muted: #9a9c9e; --line: #2e3033;
-    --accent: #f783ac; --accent-fg: #3a0a1c; --accent-soft: #2a2c2f; --card-line: #2e3033; --faint: #7d7f82; --link: #faa2c1;
+    --accent: #e08aa6; --accent-fg: #3a0a1c; --accent-soft: #2a2c2f; --card-line: #2e3033; --faint: #7d7f82; --tint: #3a1a27; --tint-line: #5c2a3d; --tint-fg: #f4a9c2;
     --pick: #f9a8c4; --pick-soft: #3d1626; --danger: #f2877f;
   --shadow: none; color-scheme: dark;
 }
@@ -87,9 +89,9 @@ button { cursor: pointer; }
 .main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .head h3 { margin: 0; font-size: 17px; line-height: 1.35; font-weight: 600; overflow-wrap: anywhere; }
-.head h3 a { color: var(--link); text-decoration: none; }
+.head h3 a { color: inherit; text-decoration: none; }
 .head h3 a:hover { text-decoration: underline; text-underline-offset: 3px; }
-.head h3 .ext { font-weight: 400; }
+.head h3 .ext { color: var(--accent); font-weight: 400; }
 .badge { font-size: 12px; font-weight: 500; color: var(--pick); background: var(--pick-soft); padding: 1px 7px; border-radius: 5px; white-space: nowrap; }
 .where, .by { color: var(--muted); font-size: 15px; overflow-wrap: anywhere; display: flex; gap: 6px; align-items: flex-start; }
 .where { color: var(--faint); }
@@ -98,7 +100,7 @@ button { cursor: pointer; }
 .why::before { content: "为什么值得去"; display: block; font-size: 12px; font-weight: 500; color: var(--faint); margin-bottom: 1px; }
 
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
-.go[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.go[aria-pressed="true"] { background: var(--tint); border-color: var(--tint-line); color: var(--tint-fg); }
 a.btn { text-decoration: none; color: var(--fg); }
 .spacer { flex: 1; }
 .del { font-size: 13px; color: var(--muted); }
@@ -109,7 +111,7 @@ a.btn { text-decoration: none; color: var(--fg); }
 .count { font-size: 13px; font-weight: 500; color: var(--muted); margin-right: 2px; font-variant-numeric: tabular-nums; }
 .count.none { font-weight: 400; color: var(--muted); }
 .chip { background: var(--accent-soft); border: 1px solid transparent; border-radius: 6px; padding: 1px 8px; font-size: 13px; max-width: 100%; overflow-wrap: anywhere; }
-.chip.mine { background: var(--surface); border-color: var(--accent); color: var(--accent); font-weight: 500; }
+.chip.mine { background: var(--tint); border-color: var(--tint-line); color: var(--tint-fg); font-weight: 500; }
 
 .empty { text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; padding: 40px 16px; }
 .empty strong { display: block; color: var(--fg); font-size: 17px; margin-bottom: 4px; }
@@ -203,7 +205,7 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
 <div id="toast" role="status" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=8"></script>
-<script src="app.js?v=8"></script>
+<script src="config.js?v=9"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>
