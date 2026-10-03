@@ -11,6 +11,7 @@ create table public.techweek_events (
   why text not null check (char_length(why) between 1 and 600),
   added_by text not null check (char_length(added_by) between 1 and 30),
   curated boolean not null default false,
+  added_key text check (added_key is null or char_length(added_key) between 16 and 64),
   created_at timestamptz not null default now()
 );
 
@@ -26,9 +27,10 @@ create table public.techweek_rsvps (
 alter table public.techweek_events enable row level security;
 alter table public.techweek_rsvps enable row level security;
 
--- 访客可以看活动、加活动（不能自己标“群主推荐”），不能改、不能删。
+-- 访客可以看活动、加活动（不能自己标“群主推荐”），不能改；只能删自己加的（凭 added_key，别人读不到）。
 revoke all on public.techweek_events from anon, authenticated;
-grant select, insert on public.techweek_events to anon;
+grant insert on public.techweek_events to anon;
+grant select (id, name, link, date, start_time, end_time, location, why, added_by, curated, created_at) on public.techweek_events to anon;
 create policy "anyone reads events" on public.techweek_events for select to anon using (true);
 create policy "anyone adds events" on public.techweek_events for insert to anon with check (curated = false);
 
@@ -58,8 +60,20 @@ returns void language sql security definer set search_path = public as $$
   update techweek_rsvps set name = btrim(p_name) where person_key = p_key
 $$;
 
-revoke execute on function public.techweek_set_going, public.techweek_my_events, public.techweek_rename_me from public;
-grant execute on function public.techweek_set_going, public.techweek_my_events, public.techweek_rename_me to anon;
+create function public.techweek_my_added(p_key text)
+returns setof uuid language sql stable security definer set search_path = public as $$
+  select id from techweek_events where added_key = p_key
+$$;
+
+create function public.techweek_delete_event(p_event uuid, p_key text)
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  delete from techweek_events where id = p_event and added_key = p_key;
+  return found;
+end $$;
+
+revoke execute on function public.techweek_set_going, public.techweek_my_events, public.techweek_rename_me, public.techweek_my_added, public.techweek_delete_event from public;
+grant execute on function public.techweek_set_going, public.techweek_my_events, public.techweek_rename_me, public.techweek_my_added, public.techweek_delete_event to anon;
 
 -- 群主预选的活动
 insert into public.techweek_events (name, link, date, start_time, end_time, location, why, added_by, curated) values

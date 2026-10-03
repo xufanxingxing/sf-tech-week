@@ -24,6 +24,8 @@ const state = {
   status: "loading",   // loading | ready | setup | unavailable
   events: [],
   mine: new Set(),     // ids of events this browser marked
+  added: new Set(),    // ids of events this browser added, which it may delete
+  confirming: null,    // event id awaiting delete confirmation
   filter: "all",
   name: store.get("tw.name") || "",
   key: store.get("tw.key"),
@@ -104,6 +106,7 @@ const PERSON = "M8 8a2.750 2.750 0 1 0 0-5.500A2.750 2.750 0 0 0 8 8ZM2.750 13.5
 
 function card(ev) {
   const mine = state.mine.has(ev.id), url = safeUrl(ev.link);
+  const sure = state.confirming === ev.id;
   let marked = false; // highlight one chip as "me"
   return h("article", { class: "event" },
     h("div", { class: "time" }, h("b", { text: ev.start }), ev.end ? h("span", { text: "– " + ev.end }) : null),
@@ -117,6 +120,9 @@ function card(ev) {
         h("button", { class: "btn go" + (mine ? "" : " primary"), type: "button", "aria-pressed": String(mine),
           disabled: state.busy.has(ev.id), text: mine ? "✓ 我会去" : "我要去", onclick: () => toggleGoing(ev) }),
         url ? h("a", { class: "btn", href: url, target: "_blank", rel: "noopener noreferrer", text: "去报名 ↗" }) : null,
+        h("span", { class: "spacer" }),
+        state.added.has(ev.id) ? h("button", { class: "link del" + (sure ? " sure" : ""), type: "button",
+          text: sure ? "确定删除？再点一次" : "删除", onclick: () => removeEvent(ev) }) : null,
       ),
       ev.goers.length ? h("div", { class: "going" },
         h("span", { class: "count", text: ev.goers.length + " 人要去" }),
@@ -145,10 +151,11 @@ async function refresh() {
   if (refreshing) return;
   refreshing = true;
   try {
-    const [ev, rsvps, mine] = await Promise.all([
-      sb.from("techweek_events").select("*").order("date").order("start_time").order("name"),
+    const [ev, rsvps, mine, added] = await Promise.all([
+      sb.from("techweek_events").select("id,name,link,date,start_time,end_time,location,why,added_by,curated").order("date").order("start_time").order("name"),
       fetchAllRsvps(),
       sb.rpc("techweek_my_events", { p_key: state.key }),
+      sb.rpc("techweek_my_added", { p_key: state.key }),
     ]);
     if (ev.error) throw ev.error;
     const byEvent = new Map();
@@ -163,6 +170,7 @@ async function refresh() {
       goers: byEvent.get(e.id) || [],
     }));
     if (!mine.error) state.mine = new Set(mine.data);
+    if (!added.error) state.added = new Set(added.data);
     state.status = "ready";
   } catch {
     if (state.status !== "ready") state.status = "unavailable";
@@ -195,6 +203,18 @@ async function toggleGoing(ev) {
   if (error) toast("没保存成功，请再试一次。");
   await refresh();
   state.busy.delete(ev.id); render();
+}
+
+async function removeEvent(ev) {
+  if (state.confirming !== ev.id) {
+    state.confirming = ev.id; render();
+    setTimeout(() => { if (state.confirming === ev.id) { state.confirming = null; render(); } }, 4000);
+    return;
+  }
+  state.confirming = null;
+  const { data, error } = await sb.rpc("techweek_delete_event", { p_event: ev.id, p_key: state.key });
+  toast(error || !data ? "没删掉，请再试一次。" : "已删除");
+  await refresh();
 }
 
 $("#tabAll").onclick = () => { state.filter = "all"; render(); };
@@ -238,7 +258,7 @@ $("#eventForm").addEventListener("submit", async (e) => {
   const save = $("#eventSave"); save.disabled = true; err.hidden = true;
   const { error } = await sb.from("techweek_events").insert({
     name: v("#fName"), link: safeUrl(link), date: v("#fDate"), start_time: v("#fStart"), end_time: v("#fEnd") || null,
-    location: v("#fWhere"), why: v("#fWhy"), added_by: v("#fBy"),
+    location: v("#fWhere"), why: v("#fWhy"), added_by: v("#fBy"), added_key: state.key,
   });
   save.disabled = false;
   if (error) { err.textContent = "没保存成功，请再试一次。"; err.hidden = false; return; }
