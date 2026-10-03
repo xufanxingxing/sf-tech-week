@@ -28,6 +28,7 @@ const state = {
   confirming: null,    // event id awaiting delete confirmation
   myComments: new Set(), // ids of comments this browser wrote
   drawer: null,        // id of the event whose comments panel is open
+  people: null,        // id of the event whose full who's-going panel is open
   drafts: new Map(),   // event id -> unsent comment text
   filter: "all",
   name: store.get("tw.name") || "",
@@ -39,10 +40,11 @@ let sb = null;
 let afterName = null;
 
 const STATUSES = [
-  { key: "going", label: "我会去" },
-  { key: "pending", label: "等待通过" },
-  { key: "interested", label: "感兴趣" },
+  { key: "going", label: "我会去", tag: "会去" },
+  { key: "pending", label: "等待通过", tag: "等待通过" },
+  { key: "interested", label: "感兴趣", tag: "感兴趣" },
 ];
+const MAX_CHIPS = 5; // names shown on a card before the rest move into the panel
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/, TIME_RE = /^\d{2}:\d{2}$/;
 const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 function dayLabel(iso) {
@@ -60,7 +62,12 @@ function toast(msg) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.hidden = true), 3500);
 }
 
-function render() { renderList(); renderDrawer(); }
+// Panels first: an open panel narrows the page, and the list measures itself to fit.
+function render() {
+  renderDrawer(); renderPeople();
+  document.body.classList.toggle("drawer-open", !!(state.drawer || state.people));
+  renderList();
+}
 
 function renderList() {
   $("#tabAll").setAttribute("aria-pressed", state.filter === "all");
@@ -106,6 +113,35 @@ function renderList() {
     }
     section.append(card(ev, s, i));
   }
+  fitGoing();
+}
+
+// A card's who's-going row stays within two lines: names drop off the end until the "全部" button fits on the second.
+function fitGoing() {
+  for (const row of document.querySelectorAll(".going")) {
+    const more = row.lastElementChild, chips = [...row.children].slice(0, -1);
+    const lines = () => new Set([...row.children].filter((c) => !c.hidden).map((c) => c.offsetTop)).size;
+    while (chips.length > 1 && lines() > 2) { chips.pop().hidden = true; more.hidden = false; }
+  }
+}
+let fitWidth = window.innerWidth;
+window.addEventListener("resize", () => {
+  if (window.innerWidth === fitWidth) return; // phones fire resize on scroll as the address bar hides
+  fitWidth = window.innerWidth;
+  if (state.status === "ready") renderList();
+});
+
+// Everyone marked on an event: this browser's own mark first, then going, pending, interested.
+function people(ev) {
+  const mine = state.mine.get(ev.id);
+  const all = STATUSES.flatMap((st) => ev.goers.filter((g) => g.status === st.key).map((g) => ({ ...g, tag: st.tag })));
+  const me = all.findIndex((g) => g.status === mine && g.name === state.name);
+  if (me >= 0) { all.unshift(...all.splice(me, 1)); all[0].me = true; }
+  return all;
+}
+function chip(p, tagged) {
+  return h("span", { class: "chip" + (p.me ? " mine" : ""), title: p.name },
+    h("span", { class: "nm", text: p.name }), tagged ? h("i", { text: p.tag }) : null);
 }
 
 function icon(d) {
@@ -122,8 +158,7 @@ const PERSON = "M8 8a2.750 2.750 0 1 0 0-5.500A2.750 2.750 0 0 0 8 8ZM2.750 13.5
 function card(ev, s, i) {
   const mine = state.mine.get(ev.id), url = safeUrl(ev.link);
   const sure = state.confirming === ev.id;
-  let marked = false; // highlight one chip as "me"
-  const groups = STATUSES.map((st) => ({ ...st, people: ev.goers.filter((g) => g.status === st.key) })).filter((g) => g.people.length);
+  const who = people(ev), listed = state.people === ev.id;
   return h("article", { class: "event" },
     h("div", { class: "time" }, h("b", { text: s.start }), s.end ? h("span", { text: "– " + s.end }) : null,
       ev.sessions.length > 1 ? h("i", { text: `· 第 ${i + 1}/${ev.sessions.length} 天` }) : null),
@@ -142,17 +177,35 @@ function card(ev, s, i) {
         state.added.has(ev.id) ? h("button", { class: "link del" + (sure ? " sure" : ""), type: "button",
           text: sure ? "确定删除？再点一次" : "删除", onclick: () => removeEvent(ev) }) : null,
       ),
-      groups.length ? h("div", { class: "going" }, groups.map((g) => h("div", { class: "grp" },
-        h("span", { class: "count", text: g.label + " " + g.people.length }),
-        g.people.map((person) => {
-          const isMe = mine === g.key && !marked && person.name === state.name;
-          if (isMe) marked = true;
-          return h("span", { class: "chip" + (isMe ? " mine" : ""), text: person.name });
-        }),
-      ))) : null,
+      who.length ? h("div", { class: "going" },
+        who.slice(0, MAX_CHIPS).map((p) => chip(p, true)),
+        h("button", { class: "chip more", type: "button", hidden: who.length <= MAX_CHIPS, "aria-expanded": String(listed),
+          text: `全部 ${who.length} 人`, onclick: () => openPeople(listed ? null : ev.id) }),
+      ) : null,
     ),
   );
 }
+
+function openPeople(id) {
+  if (id && state.drawer) openDrawer(null);
+  state.people = id;
+  render();
+  if (id) $("#pClose").focus();
+}
+
+function renderPeople() {
+  const ev = state.events.find((e) => e.id === state.people);
+  $("#people").hidden = !ev;
+  if (!ev) { state.people = null; return; }
+  const who = people(ev);
+  $("#pTitle").textContent = `已标记 (${who.length})`;
+  $("#pEvent").textContent = ev.name;
+  $("#pList").replaceChildren(...(who.length ? STATUSES.map((st) => ({ st, list: who.filter((p) => p.status === st.key) }))
+    .filter((g) => g.list.length).map((g) => h("section", {},
+      h("h3", { class: "count", text: g.st.tag + " " + g.list.length }),
+      h("div", { class: "grp" }, g.list.map((p) => chip(p))))) : [h("p", { class: "cnone", text: "还没有人标记。" })]));
+}
+$("#pClose").onclick = () => openPeople(null);
 
 function stamp(iso) {
   const d = new Date(iso), p = (n) => String(n).padStart(2, "0");
@@ -170,6 +223,7 @@ function openDrawer(id) {
   const input = $("#dInput");
   if (state.drawer) state.drafts.set(state.drawer, input.value);
   state.drawer = id;
+  if (id) state.people = null; // one panel at a time
   input.value = id ? state.drafts.get(id) || "" : "";
   render();
   if (id) input.focus();
@@ -179,7 +233,6 @@ function openDrawer(id) {
 function renderDrawer() {
   const ev = state.events.find((e) => e.id === state.drawer);
   $("#drawer").hidden = !ev;
-  document.body.classList.toggle("drawer-open", !!ev);
   if (!ev) { state.drawer = null; return; }
   $("#dTitle").textContent = `留言 (${ev.comments.length})`;
   $("#dEvent").textContent = ev.name;
@@ -205,7 +258,10 @@ async function sendComment() {
 $("#dSend").onclick = sendComment;
 $("#dClose").onclick = () => openDrawer(null);
 $("#dInput").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendComment(); } });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && state.drawer && !document.querySelector("dialog[open]")) openDrawer(null); });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || document.querySelector("dialog[open]")) return;
+  if (state.drawer) openDrawer(null); else if (state.people) openPeople(null);
+});
 
 async function removeComment(c) {
   const { data, error } = await sb.rpc("techweek_delete_comment", { p_id: c.id, p_key: state.key });

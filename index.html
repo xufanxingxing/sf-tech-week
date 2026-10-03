@@ -106,26 +106,36 @@ a.btn { text-decoration: none; color: var(--fg); }
 .del { font-size: 13px; color: var(--muted); }
 .del.sure { color: var(--danger); }
 
-.going { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
-.grp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.count { font-size: 13px; font-weight: 500; color: var(--muted); margin-right: 2px; font-variant-numeric: tabular-nums; }
-.count.none { font-weight: 400; color: var(--muted); }
-.chip { background: var(--accent-soft); border: 1px solid transparent; border-radius: 6px; padding: 1px 8px; font-size: 13px; max-width: 100%; overflow-wrap: anywhere; }
+/* Who's going: one row of names tagged with their status, at most two lines (app.js trims it), the rest behind the "全部" button. */
+.going { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+.grp { display: flex; flex-wrap: wrap; gap: 6px; }
+.count { font-size: 13px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chip { display: inline-flex; align-items: center; gap: 5px; height: 25px; background: var(--accent-soft); border: 1px solid transparent; border-radius: 6px; padding: 0 8px; font-size: 13px; max-width: 100%; white-space: nowrap; }
+.chip .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.going .nm { max-width: 8em; }
+.chip i { font-style: normal; font-size: 12px; color: var(--muted); }
 .chip.mine { background: var(--tint); border-color: var(--tint-line); color: var(--tint-fg); font-weight: 500; }
+.chip.mine i { color: inherit; font-weight: 400; opacity: .8; }
+.chip.more { position: relative; background: var(--surface); border-color: var(--line); color: var(--muted); font-weight: 500; }
+.chip.more::after { content: ""; position: absolute; inset: -8px -4px; } /* a finger-sized target around a chip-sized button */
+.chip.more:hover, .chip.more[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
 
 .cbtn { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 999px; padding: 4px 12px; font-size: 13px; font-weight: 600; min-height: 32px; }
 .cbtn svg { width: 16px; height: 16px; }
 .cbtn:hover, .cbtn[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
 .cbtn.has { background: var(--tint); border-color: var(--tint-line); color: var(--tint-fg); }
 
-#drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 5; width: min(380px, 100vw); background: var(--surface); border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(19, 21, 23, .08); display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 5; width: min(380px, 100vw); background: var(--surface); border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(19, 21, 23, .08); display: flex; flex-direction: column; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
 @media (min-width: 900px) { body.drawer-open { padding-right: 380px; } }
 .dhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
 .dhead strong { font-size: 15px; }
 .dclose { border: 0; background: none; font-size: 22px; line-height: 1; color: var(--muted); padding: 2px 6px; border-radius: 6px; }
 .dclose:hover { color: var(--fg); background: var(--accent-soft); }
 .dscroll { flex: 1; overflow-y: auto; padding: 14px 16px 20px; display: flex; flex-direction: column; gap: 12px; }
-#dEvent { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.devent { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+#pList { display: flex; flex-direction: column; gap: 16px; }
+#pList section { display: flex; flex-direction: column; gap: 6px; }
+#pList h3 { margin: 0; }
 .dcompose { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 #dName { font-size: 14px; font-weight: 600; }
 #dInput { width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 10px; font-size: 14px; resize: vertical; min-height: 40px; font-family: inherit; }
@@ -226,10 +236,10 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
   </form>
 </dialog>
 
-<aside id="drawer" aria-label="留言" hidden>
+<aside class="drawer" id="drawer" aria-label="留言" hidden>
   <div class="dhead"><strong id="dTitle">留言</strong><button class="dclose" id="dClose" type="button" aria-label="关闭留言">×</button></div>
   <div class="dscroll">
-    <div id="dEvent"></div>
+    <div class="devent" id="dEvent"></div>
     <div class="dcompose">
       <div id="dName"></div>
       <textarea id="dInput" rows="2" maxlength="300" placeholder="写一句留言…" aria-label="留言"></textarea>
@@ -239,10 +249,18 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
   </div>
 </aside>
 
+<aside class="drawer" id="people" aria-label="已标记的人" hidden>
+  <div class="dhead"><strong id="pTitle">已标记</strong><button class="dclose" id="pClose" type="button" aria-label="关闭名单">×</button></div>
+  <div class="dscroll">
+    <div class="devent" id="pEvent"></div>
+    <div id="pList"></div>
+  </div>
+</aside>
+
 <div id="toast" role="status" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=15"></script>
-<script src="app.js?v=15"></script>
+<script src="config.js?v=16"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>
