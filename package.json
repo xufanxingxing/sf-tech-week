@@ -1,0 +1,11 @@
+{
+  "name": "techweek-site",
+  "private": true,
+  "description": "Stoody AI: Tech Week 去哪儿",
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
+  }
+}

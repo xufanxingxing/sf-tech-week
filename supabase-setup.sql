@@ -166,3 +166,44 @@ select v.* from (values
 ('SpeedHacks: The Official speedrun Hackathon', 'https://www.tech-week.com/calendar/sf/events/speedhacks-the-official-speedrun-hackathon-30c239a4-638a-4bd6-8d51-e15259668f51', '2026-10-11'::date, '09:00'::time, '21:00'::time, 'Jackson Square, San Francisco（具体地址报名通过后显示）', 'SF Hack Week 的官方收官黑客松，a16z speedrun 主办。一天 12 小时，从零开始做。题目是“把时间还给人”：做一个能消除工作、学习或获取服务中某个瓶颈的东西。可以用 speedrun 各家公司的工具，每家会颁一个“最佳使用”奖。可以带队报名，也可以现场组队。Tech Week 官方精选。', 'stella', true)
 ) as v(name, link, date, start_time, end_time, location, why, added_by, curated)
 where not exists (select 1 from public.techweek_events e where e.link = v.link);
+
+-- 管理员：登记在这张表里的浏览器可以删任何活动和留言。访客读不到也写不了这张表，只能在 Supabase 后台改。
+create table public.techweek_admins (
+  person_key text primary key check (char_length(person_key) between 16 and 64),
+  note text,
+  created_at timestamptz not null default now()
+);
+alter table public.techweek_admins enable row level security;
+revoke all on public.techweek_admins from anon, authenticated;
+
+create or replace function public.techweek_my_added(p_key text)
+returns setof uuid language sql stable security definer set search_path = public as $$
+  select id from techweek_events
+  where added_key = p_key or exists (select 1 from techweek_admins a where a.person_key = p_key)
+$$;
+
+create or replace function public.techweek_delete_event(p_event uuid, p_key text)
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  delete from techweek_events e
+  where e.id = p_event
+    and (e.added_key = p_key or exists (select 1 from techweek_admins a where a.person_key = p_key));
+  return found;
+end $$;
+
+create or replace function public.techweek_my_comments(p_key text)
+returns setof bigint language sql stable security definer set search_path = public as $$
+  select id from techweek_comments
+  where person_key = p_key or exists (select 1 from techweek_admins a where a.person_key = p_key)
+$$;
+
+create or replace function public.techweek_delete_comment(p_id bigint, p_key text)
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  delete from techweek_comments c
+  where c.id = p_id
+    and (c.person_key = p_key or exists (select 1 from techweek_admins a where a.person_key = p_key));
+  return found;
+end $$;
+-- 登记管理员：让那台浏览器先在网站上用一个名字标记任意活动，然后运行：
+-- insert into public.techweek_admins (person_key, note) select person_key, name from public.techweek_rsvps where name = '那个名字' limit 1;
