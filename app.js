@@ -92,6 +92,16 @@ function render() {
   }
 }
 
+function icon(d) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 16 16"); svg.setAttribute("fill", "none"); svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "1.4"); svg.setAttribute("stroke-linecap", "round"); svg.setAttribute("stroke-linejoin", "round"); svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path"); path.setAttribute("d", d); svg.append(path);
+  return svg;
+}
+const PIN = "M8 14.5s4.5-4 4.5-7.5a4.5 4.5 0 0 0-9 0c0 3.500 4.500 7.500 4.500 7.500ZM8 8.500a1.500 1.500 0 1 0 0-3 1.500 1.500 0 0 0 0 3Z";
+const PERSON = "M8 8a2.750 2.750 0 1 0 0-5.500A2.750 2.750 0 0 0 8 8ZM2.750 13.500c.6-2.200 2.700-3.500 5.250-3.500s4.650 1.300 5.250 3.500";
+
 function card(ev) {
   const mine = state.mine.has(ev.id), url = safeUrl(ev.link);
   let marked = false; // highlight one chip as "me"
@@ -99,22 +109,23 @@ function card(ev) {
     h("div", { class: "time" }, h("b", { text: ev.start }), ev.end ? h("span", { text: "– " + ev.end }) : null),
     h("div", { class: "main" },
       h("div", { class: "head" }, h("h3", { text: ev.name }), ev.curated ? h("span", { class: "badge", text: "群主推荐" }) : null),
-      h("div", { class: "where", text: "📍 " + ev.where }),
+      h("div", { class: "by" }, icon(PERSON), h("span", { text: ev.addedBy + " 推荐" })),
+      h("div", { class: "where" }, icon(PIN), h("span", { text: ev.where })),
       h("p", { class: "why", text: ev.why }),
-      h("div", { class: "by", text: "推荐人：" + ev.addedBy }),
+      
       h("div", { class: "actions" },
         h("button", { class: "btn go" + (mine ? "" : " primary"), type: "button", "aria-pressed": String(mine),
           disabled: state.busy.has(ev.id), text: mine ? "✓ 我会去" : "我要去", onclick: () => toggleGoing(ev) }),
         url ? h("a", { class: "btn", href: url, target: "_blank", rel: "noopener noreferrer", text: "去报名 ↗" }) : null,
       ),
-      h("div", { class: "going" },
-        ev.goers.length ? h("span", { class: "count", text: ev.goers.length + " 人要去" }) : h("span", { class: "count none", text: "还没有人标记，做第一个" }),
+      ev.goers.length ? h("div", { class: "going" },
+        h("span", { class: "count", text: ev.goers.length + " 人要去" }),
         ev.goers.map((g) => {
           const isMe = mine && !marked && g.name === state.name;
           if (isMe) marked = true;
           return h("span", { class: "chip" + (isMe ? " mine" : ""), text: g.name });
         }),
-      ),
+      ) : null,
     ),
   );
 }
