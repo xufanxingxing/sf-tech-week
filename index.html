@@ -50,7 +50,7 @@ body { margin: 0; }
 
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
-.wrap { max-width: 760px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 80px; display: flex; flex-direction: column; gap: 20px; }
+.wrap { max-width: 900px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 80px; display: flex; flex-direction: column; gap: 20px; }
 button, input, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -97,7 +97,7 @@ button { cursor: pointer; }
 .where { color: var(--faint); }
 .where svg, .by svg { flex: none; width: 15px; height: 15px; margin-top: 4px; }
 .why { margin: 4px 0 2px; font-size: 14px; line-height: 1.65; color: var(--muted); overflow-wrap: anywhere; white-space: pre-wrap; }
-.why::before { content: "为什么值得去"; display: block; font-size: 12px; font-weight: 500; color: var(--faint); margin-bottom: 1px; }
+.whylabel { display: inline-block; font-size: 12px; font-weight: 600; color: var(--muted); background: var(--accent-soft); border-radius: 5px; padding: 0 6px; margin-right: 6px; line-height: 1.7; }
 
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
 .go[aria-pressed="true"] { background: var(--tint); border-color: var(--tint-line); color: var(--tint-fg); }
@@ -113,16 +113,18 @@ a.btn { text-decoration: none; color: var(--fg); }
 .chip { background: var(--accent-soft); border: 1px solid transparent; border-radius: 6px; padding: 1px 8px; font-size: 13px; max-width: 100%; overflow-wrap: anywhere; }
 .chip.mine { background: var(--tint); border-color: var(--tint-line); color: var(--tint-fg); font-weight: 500; }
 
-.comments { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
-.ctoggle { align-self: flex-start; font-size: 13px; color: var(--muted); text-decoration: none; }
-.ctoggle:hover { color: var(--fg); }
+.erow { display: grid; grid-template-columns: minmax(0, 540px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.cside { min-width: 0; padding-top: 14px; }
+.ctoggle { display: none; }
+.cbody { display: flex; flex-direction: column; gap: 8px; }
+.chead { font-size: 13px; font-weight: 600; color: var(--muted); }
 .comment { font-size: 14px; }
 .comment strong { font-weight: 600; }
 .comment p { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .ctime { color: var(--faint); font-size: 12px; margin-left: 8px; }
 .cdel { font-size: 12px; color: var(--faint); margin-left: 8px; }
 .cform { display: flex; gap: 8px; }
-.cinput { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--bg); border-radius: 8px; padding: 6px 10px; font-size: 14px; }
+.cinput { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 6px 10px; font-size: 14px; }
 .empty { text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; padding: 40px 16px; }
 .empty strong { display: block; color: var(--fg); font-size: 17px; margin-bottom: 4px; }
 
@@ -146,6 +148,14 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
 
 #toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 8px 16px; border-radius: 8px; font-size: 14px; max-width: calc(100vw - 32px); text-align: center; }
 
+@media (max-width: 760px) {
+  .erow { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .cside { padding-top: 0; }
+  .ctoggle { display: inline-block; }
+  .cside:not(.open) .cbody { display: none; }
+  .cside.open .cbody { margin-top: 10px; }
+  .chead { display: none; }
+}
 @media (max-width: 520px) {
   .row { grid-template-columns: 1fr 1fr; }
   .row .field:first-child { grid-column: 1 / -1; }
@@ -215,7 +225,7 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
 <div id="toast" role="status" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=11"></script>
-<script src="app.js?v=11"></script>
+<script src="config.js?v=12"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>

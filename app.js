@@ -102,7 +102,7 @@ function render() {
       section = h("section", { class: "day" }, h("h2", {}, l.main, h("small", { text: l.sub })));
       list.append(section);
     }
-    section.append(card(ev, s, i));
+    section.append(h("div", { class: "erow" }, card(ev, s, i), commentsBlock(ev, ev.id + ":" + i)));
   }
 }
 
@@ -130,7 +130,7 @@ function card(ev, s, i) {
         ev.curated ? h("span", { class: "badge", text: "群主推荐" }) : null),
       h("div", { class: "by" }, icon(PERSON), h("span", { text: ev.addedBy + " 推荐" })),
       h("div", { class: "where" }, icon(PIN), h("span", { text: ev.where })),
-      h("p", { class: "why", text: ev.why }),
+      h("p", { class: "why" }, h("span", { class: "whylabel", text: "为什么值得去" }), ev.why),
       h("div", { class: "actions" },
         STATUSES.map((st) => h("button", { class: "btn go", type: "button", "aria-pressed": String(mine === st.key),
           disabled: state.busy.has(ev.id), text: st.label, onclick: () => setStatus(ev, st.key) })),
@@ -146,7 +146,6 @@ function card(ev, s, i) {
           return h("span", { class: "chip" + (isMe ? " mine" : ""), text: person.name });
         }),
       ))) : null,
-      commentsBlock(ev, ev.id + ":" + i),
     ),
   );
 }
@@ -157,19 +156,22 @@ function stamp(iso) {
 }
 
 function commentsBlock(ev, key) {
+  // Beside the card on wide screens (always visible); under it on phones, behind a toggle.
   const open = state.open.has(key), n = ev.comments.length;
-  const toggle = h("button", { class: "link ctoggle", type: "button", "aria-expanded": String(open),
-    text: n ? `留言 ${n}` : "留言", onclick: () => { open ? state.open.delete(key) : state.open.add(key); render(); if (!open) document.querySelector(`[data-key="${key}"]`)?.focus(); } });
-  if (!open) return h("div", { class: "comments" }, toggle);
+  const toggle = h("button", { class: "btn ctoggle", type: "button", "aria-expanded": String(open),
+    text: n ? `留言 ${n}` : "留言", onclick: () => { open ? state.open.delete(key) : state.open.add(key); render(); } });
   const input = h("input", { class: "cinput", id: "c-" + key, "data-key": key, maxlength: "300", placeholder: "写一句留言…", "aria-label": "留言", value: state.drafts.get(ev.id) || "" });
   input.addEventListener("input", () => state.drafts.set(ev.id, input.value));
   input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); sendComment(ev, key); } });
-  return h("div", { class: "comments" }, toggle,
-    ev.comments.map((c) => h("div", { class: "comment" },
-      h("div", {}, h("strong", { text: c.name }), h("span", { class: "ctime", text: stamp(c.created_at) }),
-        state.myComments.has(c.id) ? h("button", { class: "link cdel", type: "button", text: "删除", onclick: () => removeComment(c) }) : null),
-      h("p", { text: c.body }))),
-    h("div", { class: "cform" }, input, h("button", { class: "btn", type: "button", text: "发送", onclick: () => sendComment(ev, key) })),
+  return h("aside", { class: "cside" + (open ? " open" : ""), "aria-label": "留言" }, toggle,
+    h("div", { class: "cbody" },
+      h("div", { class: "chead", text: n ? `留言 ${n}` : "留言" }),
+      ev.comments.map((c) => h("div", { class: "comment" },
+        h("div", {}, h("strong", { text: c.name }), h("span", { class: "ctime", text: stamp(c.created_at) }),
+          state.myComments.has(c.id) ? h("button", { class: "link cdel", type: "button", text: "删除", onclick: () => removeComment(c) }) : null),
+        h("p", { text: c.body }))),
+      h("div", { class: "cform" }, input, h("button", { class: "btn", type: "button", text: "发送", onclick: () => sendComment(ev, key) })),
+    ),
   );
 }
 
