@@ -23,7 +23,7 @@ function newKey() {
 const state = {
   status: "loading",   // loading | ready | setup | unavailable
   events: [],
-  mine: new Set(),     // ids of events this browser marked
+  mine: new Map(),     // event id -> this browser's status on it
   added: new Set(),    // ids of events this browser added, which it may delete
   confirming: null,    // event id awaiting delete confirmation
   filter: "all",
@@ -35,6 +35,11 @@ if (!state.key) { state.key = newKey(); store.set("tw.key", state.key); }
 let sb = null;
 let afterName = null;
 
+const STATUSES = [
+  { key: "going", label: "我会去" },
+  { key: "pending", label: "等待通过" },
+  { key: "interested", label: "感兴趣" },
+];
 const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 function dayLabel(iso) {
   const [y, m, d] = iso.split("-").map(Number);
@@ -71,13 +76,13 @@ function render() {
   const people = new Set();
   for (const ev of state.events) for (const g of ev.goers) people.add(g.name);
   $("#stats").textContent = state.events.length
-    ? `${state.events.length} 个活动 · ${people.size} 人已标记要去`
+    ? `${state.events.length} 个活动 · ${people.size} 人已标记`
     : "SF Tech Week 值得去的活动，和群里谁会去。";
 
   const shown = state.events.filter((ev) => state.filter === "all" || state.mine.has(ev.id));
   if (!shown.length) {
     list.append(state.filter === "mine"
-      ? h("div", { class: "empty" }, h("strong", { text: "你还没标记任何活动" }), "在“全部”里点“我要去”，这里就是你的日程。")
+      ? h("div", { class: "empty" }, h("strong", { text: "你还没标记任何活动" }), "在“全部”里点“我会去”“等待通过”或“感兴趣”，这里就是你的日程。")
       : h("div", { class: "empty" }, h("strong", { text: "还没有活动" }), "点右上角“添加活动”，放上第一个值得去的。"));
     return;
   }
@@ -105,33 +110,34 @@ const PIN = "M8 14.5s4.5-4 4.5-7.5a4.5 4.5 0 0 0-9 0c0 3.500 4.500 7.500 4.500 7
 const PERSON = "M8 8a2.750 2.750 0 1 0 0-5.500A2.750 2.750 0 0 0 8 8ZM2.750 13.500c.6-2.200 2.700-3.500 5.250-3.500s4.650 1.300 5.250 3.500";
 
 function card(ev) {
-  const mine = state.mine.has(ev.id), url = safeUrl(ev.link);
+  const mine = state.mine.get(ev.id), url = safeUrl(ev.link);
   const sure = state.confirming === ev.id;
   let marked = false; // highlight one chip as "me"
+  const groups = STATUSES.map((st) => ({ ...st, people: ev.goers.filter((g) => g.status === st.key) })).filter((g) => g.people.length);
   return h("article", { class: "event" },
     h("div", { class: "time" }, h("b", { text: ev.start }), ev.end ? h("span", { text: "– " + ev.end }) : null),
     h("div", { class: "main" },
-      h("div", { class: "head" }, h("h3", { text: ev.name }), ev.curated ? h("span", { class: "badge", text: "群主推荐" }) : null),
+      h("div", { class: "head" },
+        h("h3", {}, url ? h("a", { href: url, target: "_blank", rel: "noopener noreferrer", title: "打开报名页面" }, ev.name, h("span", { class: "ext", "aria-hidden": "true", text: " ↗" })) : ev.name),
+        ev.curated ? h("span", { class: "badge", text: "群主推荐" }) : null),
       h("div", { class: "by" }, icon(PERSON), h("span", { text: ev.addedBy + " 推荐" })),
       h("div", { class: "where" }, icon(PIN), h("span", { text: ev.where })),
       h("p", { class: "why", text: ev.why }),
-      
       h("div", { class: "actions" },
-        h("button", { class: "btn go" + (mine ? "" : " primary"), type: "button", "aria-pressed": String(mine),
-          disabled: state.busy.has(ev.id), text: mine ? "✓ 我会去" : "我要去", onclick: () => toggleGoing(ev) }),
-        url ? h("a", { class: "btn", href: url, target: "_blank", rel: "noopener noreferrer", text: "去报名 ↗" }) : null,
+        STATUSES.map((st) => h("button", { class: "btn go", type: "button", "aria-pressed": String(mine === st.key),
+          disabled: state.busy.has(ev.id), text: (mine === st.key ? "✓ " : "") + st.label, onclick: () => setStatus(ev, st.key) })),
         h("span", { class: "spacer" }),
         state.added.has(ev.id) ? h("button", { class: "link del" + (sure ? " sure" : ""), type: "button",
           text: sure ? "确定删除？再点一次" : "删除", onclick: () => removeEvent(ev) }) : null,
       ),
-      ev.goers.length ? h("div", { class: "going" },
-        h("span", { class: "count", text: ev.goers.length + " 人要去" }),
-        ev.goers.map((g) => {
-          const isMe = mine && !marked && g.name === state.name;
+      groups.length ? h("div", { class: "going" }, groups.map((g) => h("div", { class: "grp" },
+        h("span", { class: "count", text: g.label + " " + g.people.length }),
+        g.people.map((person) => {
+          const isMe = mine === g.key && !marked && person.name === state.name;
           if (isMe) marked = true;
-          return h("span", { class: "chip" + (isMe ? " mine" : ""), text: g.name });
+          return h("span", { class: "chip" + (isMe ? " mine" : ""), text: person.name });
         }),
-      ) : null,
+      ))) : null,
     ),
   );
 }
@@ -139,7 +145,7 @@ function card(ev) {
 async function fetchAllRsvps() {
   const rows = [];
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await sb.from("techweek_rsvps").select("id,event_id,name").order("id").range(from, from + 999);
+    const { data, error } = await sb.from("techweek_rsvps").select("id,event_id,name,status").order("id").range(from, from + 999);
     if (error) throw error;
     rows.push(...data);
     if (data.length < 1000) return rows;
@@ -154,14 +160,14 @@ async function refresh() {
     const [ev, rsvps, mine, added] = await Promise.all([
       sb.from("techweek_events").select("id,name,link,date,start_time,end_time,location,why,added_by,curated").order("date").order("start_time").order("name"),
       fetchAllRsvps(),
-      sb.rpc("techweek_my_events", { p_key: state.key }),
+      sb.rpc("techweek_my_rsvps", { p_key: state.key }),
       sb.rpc("techweek_my_added", { p_key: state.key }),
     ]);
     if (ev.error) throw ev.error;
     const byEvent = new Map();
     for (const r of rsvps) {
       if (!byEvent.has(r.event_id)) byEvent.set(r.event_id, []);
-      byEvent.get(r.event_id).push({ name: r.name });
+      byEvent.get(r.event_id).push({ name: r.name, status: r.status });
     }
     state.events = ev.data.map((e) => ({
       id: e.id, name: e.name, link: e.link, date: e.date,
@@ -169,7 +175,7 @@ async function refresh() {
       where: e.location, why: e.why, addedBy: e.added_by, curated: e.curated,
       goers: byEvent.get(e.id) || [],
     }));
-    if (!mine.error) state.mine = new Set(mine.data);
+    if (!mine.error) state.mine = new Map(mine.data.map((r) => [r.event_id, r.status]));
     if (!added.error) state.added = new Set(added.data);
     state.status = "ready";
   } catch {
@@ -194,12 +200,12 @@ async function setName(name) {
   await refresh();
 }
 
-async function toggleGoing(ev) {
-  if (!state.name) { askName(() => toggleGoing(ev)); return; }
+async function setStatus(ev, status) {
+  if (!state.name) { askName(() => setStatus(ev, status)); return; }
   if (state.busy.has(ev.id)) return;
-  const going = !state.mine.has(ev.id);
+  const next = state.mine.get(ev.id) === status ? null : status; // clicking the active one clears it
   state.busy.add(ev.id); render();
-  const { error } = await sb.rpc("techweek_set_going", { p_event: ev.id, p_key: state.key, p_name: state.name, p_going: going });
+  const { error } = await sb.rpc("techweek_set_status", { p_event: ev.id, p_key: state.key, p_name: state.name, p_status: next });
   if (error) toast("没保存成功，请再试一次。");
   await refresh();
   state.busy.delete(ev.id); render();
