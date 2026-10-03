@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Tech Week 去哪儿</title>
+<title>Stoody AI: Tech Week 去哪儿</title>
+<link rel="icon" type="image/png" href="logo.png">
 <meta name="description" content="SF Tech Week 值得去的活动，和群里谁会去。">
 <style>
 body { margin: 0; }
@@ -18,11 +19,11 @@ body { margin: 0; }
   --line: #e4e5e7;
   --card-line: #ffffff;
   --faint: #9a9c9f;
-  --accent: #2f66d0;
+  --accent: #d6336c;
   --accent-fg: #ffffff;
   --accent-soft: #eef0f2;
-  --pick: #2f66d0;
-  --pick-soft: #e6eefc;
+  --pick: #c2255c;
+  --pick-soft: #ffe6ee;
   --danger: #b3261e;
   --shadow: 0 1px 4px rgba(19, 21, 23, .03);
   --display: -apple-system, BlinkMacSystemFont, "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
@@ -32,15 +33,15 @@ body { margin: 0; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #131517; --surface: #1e2022; --fg: #f2f3f4; --muted: #9a9c9e; --line: #2e3033;
-    --accent: #7fa6f5; --accent-fg: #0d1a33; --accent-soft: #2a2c2f; --card-line: #2e3033; --faint: #7d7f82;
-    --pick: #8fb2f5; --pick-soft: #1c2740; --danger: #f2877f;
+    --accent: #f783ac; --accent-fg: #3a0a1c; --accent-soft: #2a2c2f; --card-line: #2e3033; --faint: #7d7f82;
+    --pick: #f9a8c4; --pick-soft: #3d1626; --danger: #f2877f;
     --shadow: none; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #131517; --surface: #1e2022; --fg: #f2f3f4; --muted: #9a9c9e; --line: #2e3033;
-    --accent: #7fa6f5; --accent-fg: #0d1a33; --accent-soft: #2a2c2f; --card-line: #2e3033; --faint: #7d7f82;
-    --pick: #8fb2f5; --pick-soft: #1c2740; --danger: #f2877f;
+    --accent: #f783ac; --accent-fg: #3a0a1c; --accent-soft: #2a2c2f; --card-line: #2e3033; --faint: #7d7f82;
+    --pick: #f9a8c4; --pick-soft: #3d1626; --danger: #f2877f;
   --shadow: none; color-scheme: dark;
 }
 
@@ -54,6 +55,9 @@ button { cursor: pointer; }
 /* Header */
 .top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
 .top h1 { font-family: var(--display); font-weight: 700; font-size: clamp(24px, 5vw, 30px); line-height: 1.2; margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+.top h1 { display: flex; align-items: center; gap: 12px; }
+.top h1 span { min-width: 0; }
+.logo { flex: none; width: 40px; height: 40px; border-radius: 10px; background: #fff; padding: 4px; box-sizing: border-box; object-fit: contain; }
 .top p { margin: 6px 0 0; color: var(--muted); }
 .btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 14px; font-size: 14px; font-weight: 500; white-space: nowrap; }
 .btn:hover { border-color: var(--muted); }
@@ -85,8 +89,8 @@ button { cursor: pointer; }
 .where, .by { color: var(--muted); font-size: 15px; overflow-wrap: anywhere; display: flex; gap: 6px; align-items: flex-start; }
 .where { color: var(--faint); }
 .where svg, .by svg { flex: none; width: 15px; height: 15px; margin-top: 4px; }
-.why { margin: 4px 0 2px; font-size: 15px; overflow-wrap: anywhere; white-space: pre-wrap; }
-.why::before { content: "为什么值得去"; display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 1px; }
+.why { margin: 4px 0 2px; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; white-space: pre-wrap; }
+.why::before { content: "为什么值得去"; display: block; font-size: 12px; font-weight: 500; color: var(--faint); margin-bottom: 1px; }
 
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
 .go[aria-pressed="true"] { background: var(--surface); border-color: var(--accent); color: var(--accent); }
@@ -131,7 +135,7 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
 <div class="wrap">
   <header class="top">
     <div>
-      <h1>Tech Week 去哪儿</h1>
+      <h1><img class="logo" src="logo.png" alt="" width="40" height="40"><span>Stoody AI: Tech Week 去哪儿</span></h1>
       <p id="stats">SF Tech Week 值得去的活动，和群里谁会去。</p>
     </div>
     <button class="btn primary" id="addBtn" type="button">＋ 添加活动</button>
@@ -186,7 +190,7 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
 <div id="toast" role="status" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=3"></script>
-<script src="app.js?v=3"></script>
+<script src="config.js?v=4"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>
