@@ -130,7 +130,7 @@ function card(ev, s, i) {
       h("p", { class: "why", text: ev.why }),
       h("div", { class: "actions" },
         STATUSES.map((st) => h("button", { class: "btn go", type: "button", "aria-pressed": String(mine === st.key),
-          disabled: state.busy.has(ev.id), text: (mine === st.key ? "✓ " : "") + st.label, onclick: () => setStatus(ev, st.key) })),
+          disabled: state.busy.has(ev.id), text: st.label, onclick: () => setStatus(ev, st.key) })),
         h("span", { class: "spacer" }),
         state.added.has(ev.id) ? h("button", { class: "link del" + (sure ? " sure" : ""), type: "button",
           text: sure ? "确定删除？再点一次" : "删除", onclick: () => removeEvent(ev) }) : null,
