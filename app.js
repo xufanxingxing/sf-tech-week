@@ -76,6 +76,10 @@ const TOPICS = [
   { key: "deeptech", label: "Deep Tech", rx: /deep ?tech|深科技/i },
 ];
 const TOPIC_LABEL = Object.fromEntries(TOPICS.map((t) => [t.key, t.label]));
+// Chips and tags take their color from the kind of topic: technology, building a company, an industry, or a format or community.
+const TOPIC_KIND = { agent: "tech", physical: "tech", infra: "tech", evals: "tech", voice: "tech", deeptech: "tech",
+  founder: "biz", funding: "biz", gtm: "biz", consumer: "field", health: "field", fintech: "field", security: "field",
+  hackathon: "scene", global: "scene", women: "scene", sports: "scene" };
 // Topics are stored for the calendar's events and the group owner's picks; an event a visitor added is matched on its own words.
 function topicsOf(e) {
   if (Array.isArray(e.topics)) return e.topics.filter((k) => k in TOPIC_LABEL);
@@ -185,7 +189,7 @@ function renderList() {
 function renderTopics(scope) {
   const count = new Map();
   for (const ev of scope) for (const k of ev.topics) count.set(k, (count.get(k) || 0) + 1);
-  const chips = TOPICS.filter((t) => count.has(t.key) || state.topics.has(t.key)).map((t) => h("button", { class: "topic", type: "button",
+  const chips = TOPICS.filter((t) => count.has(t.key) || state.topics.has(t.key)).map((t) => h("button", { class: "topic k-" + TOPIC_KIND[t.key], type: "button",
     "aria-pressed": String(state.topics.has(t.key)), onclick: () => {
       const on = !state.topics.delete(t.key);
       if (on) state.topics.add(t.key);
@@ -261,7 +265,7 @@ function card(ev, s, i) {
         h("h3", {}, url ? h("a", { href: url, target: "_blank", rel: "noopener noreferrer", title: "打开报名页面", onclick: () => track("open_link", ev.id) }, ev.name, h("span", { class: "ext", "aria-hidden": "true", text: " ↗" })) : ev.name),
         ev.curated ? h("span", { class: "badge", text: "群主推荐" }) : null,
         ev.featured ? h("span", { class: "badge official", text: "官方精选" }) : null),
-      ev.topics.length ? h("div", { class: "tags" }, ev.topics.map((k) => h("span", { class: "tag", text: TOPIC_LABEL[k] }))) : null,
+      ev.topics.length ? h("div", { class: "tags" }, ev.topics.map((k) => h("span", { class: "tag k-" + TOPIC_KIND[k], text: TOPIC_LABEL[k] }))) : null,
       h("div", { class: "by" }, icon(PERSON), h("span", { text: ev.calendar ? "主办：" + (ev.hosts || "未注明") : ev.addedBy + " 推荐" })),
       h("div", { class: "where" }, icon(PIN), h("span", { text: ev.where })),
       ev.intro ? h("p", { class: "intro", text: ev.intro }) : null,

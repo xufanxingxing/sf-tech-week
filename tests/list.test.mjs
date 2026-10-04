@@ -1,7 +1,7 @@
 // The list: starting up, laying events out by day, marking a status, and keeping up with the database.
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { boot, event, rsvp, crowd, KEY, plain, shown } from "./harness.mjs";
+import { boot, event, rsvp, crowd, KEY, plain, shown, HTML } from "./harness.mjs";
 
 const listText = (x) => x.$("#list").textContent;
 const titles = (x, el) => x.$$(".event h3", el).map((h) => h.textContent.replace(" ↗", ""));
@@ -171,7 +171,7 @@ describe("laying out the list", () => {
     const a = event(), b = event();
     const x = await boot(t, { name: "Ann", events: [a, b], rsvps: [rsvp(a.id, "Ann", "going", KEY), rsvp(b.id, "Bo", "pending")] });
     assert.equal(x.$("#stats").textContent, "2 个活动");
-    assert.equal(x.$(".bar").nextElementSibling, x.$("#stats"));
+    assert.equal(x.$("#topics").nextElementSibling, x.$("#stats"));
     await x.click(x.$("#tabMine"));
     assert.equal(x.$("#stats").textContent, "1 个活动");
     assert.doesNotMatch(x.$(".top").textContent, /个活动|已标记/);
@@ -400,10 +400,10 @@ describe("topics", () => {
     ] });
   }
 
-  test("above the tabs sits a chip for each topic the tab's events have, in a fixed order, with how many", async (t) => {
+  test("under the tabs sits a chip for each topic the tab's events have, in a fixed order, with how many", async (t) => {
     const x = await four(t);
     assert.deepEqual(chips(x), ["Agent1", "创业2", "黑客松1"]);
-    assert.equal(x.$("#topics").nextElementSibling, x.$(".bar"));
+    assert.equal(x.$(".bar").nextElementSibling, x.$("#topics"));
     assert.deepEqual(titles(x), ["Alpha", "Beta", "Gamma", "Plain"]);
   });
 
@@ -440,6 +440,15 @@ describe("topics", () => {
     const x = await four(t);
     assert.deepEqual(tags(x, "Alpha"), ["Agent", "创业"]);
     assert.equal(x.$(".tags", x.card("Plain")), null);
+  });
+
+  test("chips and tags are colored by the kind of topic, the same on a chip as on a card", async (t) => {
+    const x = await four(t);
+    const kind = (el) => [...el.classList].find((c) => c.startsWith("k-"));
+    assert.deepEqual(x.$$("#topics .topic").map(kind), ["k-tech", "k-biz", "k-scene"]);
+    assert.deepEqual(x.$$(".tag", x.card("Alpha")).map(kind), ["k-tech", "k-biz"]);
+    for (const k of ["tech", "biz", "field", "scene"]) assert.match(HTML, new RegExp(`\\.k-${k} \\{ --k-bg: var\\(--${k}-bg\\); --k-fg: var\\(--${k}-fg\\); \\}`));
+    assert.doesNotMatch(x.app("JSON.stringify(TOPICS.map((t) => TOPIC_KIND[t.key]))"), /null/, "every topic has a kind");
   });
 
   test("an event without stored topics is matched on its name and reason; stored topics nobody knows are dropped", async (t) => {

@@ -19,14 +19,18 @@ body { margin: 0; }
   --line: #e4e5e7;
   --card-line: #ffffff;
   --faint: #9a9c9f;
-  --tint: #fceaf0;
-  --tint-line: #f3c6d5;
-  --tint-fg: #a8325c;
-  --accent: #c2557a;
+  --tint: #e8ebfb;
+  --tint-line: #c9d0f4;
+  --tint-fg: #3442a8;
+  --accent: #4453c4;
   --accent-fg: #ffffff;
   --accent-soft: #eef0f2;
-  --pick: #a8325c;
-  --pick-soft: #fceaf0;
+  --pick: #3442a8;
+  --pick-soft: #e8ebfb;
+  --tech-bg: #dcf3f1; --tech-fg: #0f6b68;     /* topic colors, one pair per kind of topic */
+  --biz-bg: #e2f3df; --biz-fg: #2c6e2f;
+  --field-bg: #f3e6f8; --field-fg: #7b3a96;
+  --scene-bg: #fbefd5; --scene-fg: #8a5a0a;
   --danger: #b3261e;
   --shadow: 0 1px 4px rgba(19, 21, 23, .03);
   --display: system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
@@ -36,15 +40,15 @@ body { margin: 0; }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #131517; --surface: #1e2022; --fg: #f2f3f4; --muted: #9a9c9e; --line: #2e3033;
-    --accent: #e08aa6; --accent-fg: #3a0a1c; --accent-soft: #2a2c2f; --card-line: #2e3033; --faint: #7d7f82; --tint: #3a1a27; --tint-line: #5c2a3d; --tint-fg: #f4a9c2;
-    --pick: #f9a8c4; --pick-soft: #3d1626; --danger: #f2877f;
+    --accent: #8f9cf2; --accent-fg: #10143a; --accent-soft: #2a2c2f; --card-line: #2e3033; --faint: #7d7f82; --tint: #1f2547; --tint-line: #37408a; --tint-fg: #aab4f5;
+    --pick: #aab4f5; --pick-soft: #1f2547; --tech-bg: #12312f; --tech-fg: #7fd6d0; --biz-bg: #17301a; --biz-fg: #8fd294; --field-bg: #33203c; --field-fg: #d6a4e8; --scene-bg: #3a2c0e; --scene-fg: #e8c377; --danger: #f2877f;
     --shadow: none; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #131517; --surface: #1e2022; --fg: #f2f3f4; --muted: #9a9c9e; --line: #2e3033;
-    --accent: #e08aa6; --accent-fg: #3a0a1c; --accent-soft: #2a2c2f; --card-line: #2e3033; --faint: #7d7f82; --tint: #3a1a27; --tint-line: #5c2a3d; --tint-fg: #f4a9c2;
-    --pick: #f9a8c4; --pick-soft: #3d1626; --danger: #f2877f;
+    --accent: #8f9cf2; --accent-fg: #10143a; --accent-soft: #2a2c2f; --card-line: #2e3033; --faint: #7d7f82; --tint: #1f2547; --tint-line: #37408a; --tint-fg: #aab4f5;
+    --pick: #aab4f5; --pick-soft: #1f2547; --tech-bg: #12312f; --tech-fg: #7fd6d0; --biz-bg: #17301a; --biz-fg: #8fd294; --field-bg: #33203c; --field-fg: #d6a4e8; --scene-bg: #3a2c0e; --scene-fg: #e8c377; --danger: #f2877f;
   --shadow: none; color-scheme: dark;
 }
 
@@ -75,22 +79,26 @@ button { cursor: pointer; }
 .me { color: var(--muted); font-size: 13px; }
 .link { border: 0; background: none; padding: 0; color: var(--fg); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
 
-.topics { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: -6px; }
-.topic { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 11px; font-size: 13px; white-space: nowrap; }
-.topic small { margin-left: 5px; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
-.topic:hover { border-color: var(--muted); }
-.topic[aria-pressed="true"] { background: var(--tint); border-color: var(--tint-line); color: var(--tint-fg); font-weight: 500; }
-.topic[aria-pressed="true"] small { color: inherit; opacity: .7; }
+.topics { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: -6px; }
+.k-tech { --k-bg: var(--tech-bg); --k-fg: var(--tech-fg); }
+.k-biz { --k-bg: var(--biz-bg); --k-fg: var(--biz-fg); }
+.k-field { --k-bg: var(--field-bg); --k-fg: var(--field-fg); }
+.k-scene { --k-bg: var(--scene-bg); --k-fg: var(--scene-fg); }
+.topic { border: 0; background: var(--k-bg); color: var(--k-fg); border-radius: 999px; padding: 4px 12px; font-size: 13px; white-space: nowrap; }
+.topic small { margin-left: 5px; font-size: 12px; opacity: .65; font-variant-numeric: tabular-nums; }
+.topic:hover { box-shadow: inset 0 0 0 1px var(--k-fg); }
+.topic[aria-pressed="true"] { background: var(--k-fg); color: var(--k-bg); font-weight: 500; }
+.topic[aria-pressed="true"] small { opacity: .8; }
 .topics .link { font-size: 13px; color: var(--muted); margin-left: 4px; }
 .tags { display: flex; flex-wrap: wrap; gap: 5px; }
-.tag { font-size: 12px; line-height: 1.7; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; white-space: nowrap; }
+.tag { font-size: 12px; line-height: 1.75; color: var(--k-fg); background: var(--k-bg); border-radius: 5px; padding: 0 7px; white-space: nowrap; }
 .allbar { display: flex; flex-direction: column; gap: 10px; }
 .days { display: flex; flex-wrap: wrap; gap: 4px; }
 .days .tab { border: 1px solid var(--line); background: var(--surface); font-variant-numeric: tabular-nums; }
 .days .tab[aria-pressed="true"] { background: var(--fg); border-color: var(--fg); color: var(--bg); box-shadow: none; }
 .search { width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 12px; font-size: 15px; }
 .src { margin: 0; font-size: 13px; color: var(--muted); }
-#stats { margin-block: -10px; }
+#stats { margin-block: -8px -10px; }
 .src a { color: inherit; text-underline-offset: 3px; }
 .intro { margin: 2px 0 0; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
 .badge.official { color: var(--muted); background: var(--accent-soft); }
@@ -206,7 +214,6 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
     <button class="btn primary" id="addBtn" type="button">＋ 添加活动</button>
   </header>
 
-  <div class="topics" id="topics" role="group" aria-label="按主题筛选" hidden></div>
   <div class="bar">
     <div class="tabs" role="group" aria-label="筛选">
       <button class="tab" id="tabPicks" type="button" aria-pressed="true">推荐</button>
@@ -215,6 +222,7 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
     </div>
     <div class="me" id="me"></div>
   </div>
+  <div class="topics" id="topics" role="group" aria-label="按主题筛选" hidden></div>
   <p class="src" id="stats" hidden></p>
 
   <div class="notice" id="notice" hidden></div>
@@ -287,7 +295,7 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
 <div id="toast" role="status" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=23"></script>
-<script src="app.js?v=23"></script>
+<script src="config.js?v=24"></script>
+<script src="app.js?v=24"></script>
 </body>
 </html>
