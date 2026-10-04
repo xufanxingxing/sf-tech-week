@@ -23,6 +23,13 @@ describe("language", () => {
     assert.equal(address(x), "");
   });
 
+  test("under the title is the link to the official calendar, which opens in a new tab", async (t) => {
+    const x = await boot(t);
+    assert.equal(x.$(".top p").textContent, "SF Tech Week 总链接 tech-week.com/calendar/sf ↗");
+    const a = x.$(".top p a");
+    assert.deepEqual([a.getAttribute("href"), a.getAttribute("target"), a.getAttribute("rel")], ["https://www.tech-week.com/calendar/sf", "_blank", "noopener noreferrer"]);
+  });
+
   test("pressing it turns the whole page English, offers Chinese as the way back, and puts the choice in the address", async (t) => {
     const e = pick(), extra = pick({ name: "House", extra_dates: [{ date: "2026-10-06", start: "11:00", end: "17:00" }], topics: [] });
     const x = await boot(t, { name: "stella", events: [e, extra], rsvps: [rsvp(e.id, "stella", "pending", KEY), rsvp(e.id, "Bo")], comments: [comment(e.id, "Bo", "see you")] });
@@ -31,9 +38,10 @@ describe("language", () => {
     assert.equal(x.$("#langBtn").getAttribute("aria-label"), "切换到中文");
     assert.equal(address(x), "?lang=en");
     assert.equal(x.document.documentElement.lang, "en");
-    assert.equal(x.document.title, "Stoody AI: Where to Go at Tech Week");
-    assert.equal(x.$("h1").textContent, "Stoody AI: Where to Go at Tech Week");
-    assert.deepEqual(texts(x, ".tabs .tab"), ["Picks", "All", "My marks"]);
+    assert.equal(x.document.title, "Stoody AI: SF Tech Week");
+    assert.equal(x.$("h1").textContent, "Stoody AI: SF Tech Week");
+    assert.equal(x.$(".top p").textContent, "Official SF Tech Week calendar tech-week.com/calendar/sf ↗");
+    assert.deepEqual(texts(x, ".tabs .tab"), ["Recommendations", "All", "My marks"]);
     assert.equal(x.$("#addBtn").textContent, "＋ Add event");
     assert.equal(x.$("#me").textContent, "You are stella · Rename");
     assert.equal(x.$("#stats").textContent, "2 events");
@@ -72,7 +80,7 @@ describe("language", () => {
   test("a link with ?lang=en opens in English", async (t) => {
     const x = await boot(t, { hash: "?lang=en", events: [pick()] });
     assert.equal(x.$("#langTo").textContent, "CN");
-    assert.deepEqual(texts(x, ".tabs .tab"), ["Picks", "All", "My marks"]);
+    assert.deepEqual(texts(x, ".tabs .tab"), ["Recommendations", "All", "My marks"]);
     assert.equal(x.$(".why", x.card("Supper")).textContent, "Why goA small dinner.");
     assert.equal(address(x), "?lang=en");
   });

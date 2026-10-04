@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Stoody AI: Tech Week 去哪儿</title>
 <link rel="icon" type="image/png" href="logo.png">
-<meta name="description" content="SF Tech Week 值得去的活动，和群里谁会去。">
+<meta name="description" content="SF Tech Week 推荐活动，和群里谁会去。">
 <style>
 body { margin: 0; }
 [hidden] { display: none !important; }
@@ -70,6 +70,8 @@ button { cursor: pointer; }
 .langbtn svg { width: 16px; height: 16px; }
 .langbtn:hover { border-color: var(--muted); color: var(--fg); }
 .top p { margin: 6px 0 0; color: var(--muted); }
+.top p a { color: inherit; text-underline-offset: 3px; white-space: nowrap; }
+.top p a:hover { color: var(--fg); }
 .btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 14px; font-size: 14px; font-weight: 500; white-space: nowrap; }
 .btn:hover { border-color: var(--muted); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
@@ -213,7 +215,7 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
   <header class="top">
     <div>
       <h1><img class="logo" src="logo.png" alt="" width="40" height="40"><span>Stoody AI: Tech Week 去哪儿</span></h1>
-      <p>SF Tech Week 值得去的活动，和群里谁会去。</p>
+      <p>SF Tech Week 总链接 <a href="https://www.tech-week.com/calendar/sf" target="_blank" rel="noopener noreferrer">tech-week.com/calendar/sf ↗</a></p>
     </div>
     <div class="topright">
       <button class="langbtn" id="langBtn" type="button" aria-label="Switch to English"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path d="M1.75 8h12.500M8 1.750c1.800 1.700 2.700 3.800 2.700 6.250S9.800 12.550 8 14.250C6.200 12.550 5.300 10.450 5.300 8S6.200 3.450 8 1.750Z"/></svg><span id="langTo">EN</span></button>
@@ -302,7 +304,7 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
 <div id="toast" role="status" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=26"></script>
-<script src="app.js?v=26"></script>
+<script src="config.js?v=27"></script>
+<script src="app.js?v=27"></script>
 </body>
 </html>
