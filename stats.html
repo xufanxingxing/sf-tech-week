@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>访问数据 · Tech Week 去哪儿</title>
+<link rel="icon" type="image/png" href="logo.png">
+<meta name="robots" content="noindex">
+<style>
+body { margin: 0; }
+[hidden] { display: none !important; }
+/* Layout: a column of cards. Headline numbers first, then visitors by day, then what visitors did, which events drew them, and where they came from.
+   The palette and type are the site's own; --series-1 and --series-2 are the only chart colors. */
+:root {
+  --bg: #f3f4f5;
+  --surface: #ffffff;
+  --fg: #131517;
+  --muted: #737577;
+  --line: #e4e5e7;
+  --axis: #c9cbce;
+  --card-line: #ffffff;
+  --faint: #9a9c9f;
+  --accent: #c2557a;
+  --accent-soft: #eef0f2;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --shadow: 0 1px 4px rgba(19, 21, 23, .03);
+  --body: system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131517; --surface: #1e2022; --fg: #f2f3f4; --muted: #9a9c9e; --line: #2e3033; --axis: #45484c; --card-line: #2e3033; --faint: #7d7f82;
+    --accent: #e08aa6; --accent-soft: #2a2c2f; --series-1: #3987e5; --series-2: #d95926;
+    --shadow: none; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #131517; --surface: #1e2022; --fg: #f2f3f4; --muted: #9a9c9e; --line: #2e3033; --axis: #45484c; --card-line: #2e3033; --faint: #7d7f82;
+  --accent: #e08aa6; --accent-soft: #2a2c2f; --series-1: #3987e5; --series-2: #d95926;
+  --shadow: none; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+.wrap { max-width: 920px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 80px; display: flex; flex-direction: column; gap: 16px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.top h1 { font-weight: 700; font-size: clamp(24px, 5vw, 30px); line-height: 1.25; margin: 0; display: flex; align-items: center; gap: 12px; }
+.logo { flex: none; width: 40px; height: 40px; border-radius: 10px; background: #fff; padding: 4px; object-fit: contain; }
+.top p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 14px; font-size: 14px; font-weight: 500; white-space: nowrap; text-decoration: none; }
+.btn:hover { border-color: var(--muted); }
+.filters { border-block: 1px solid var(--line); padding-block: 10px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.tab { border: 0; background: none; padding: 5px 12px; border-radius: 8px; color: var(--muted); font-size: 14px; font-weight: 500; }
+.tab[aria-pressed="true"] { background: var(--surface); color: var(--fg); box-shadow: var(--shadow); }
+
+#main { display: flex; flex-direction: column; gap: 16px; transition: opacity .15s; }
+#main.stale { opacity: .5; } /* a new range is loading: the old numbers stay in place, dimmed */
+.empty { text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; padding: 40px 16px; }
+.empty strong { display: block; color: var(--fg); font-size: 17px; margin-bottom: 4px; }
+.card { background: var(--surface); border: 1px solid var(--card-line); border-radius: 12px; box-shadow: var(--shadow); padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.card h2 { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.4; }
+.card h2 small { display: block; font-size: 13px; font-weight: 400; color: var(--muted); }
+.none { margin: 0; color: var(--muted); font-size: 14px; }
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+
+/* Headline numbers */
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--card-line); border-radius: 12px; box-shadow: var(--shadow); padding: 12px 14px; }
+.tile span { display: block; font-size: 13px; color: var(--muted); }
+.tile b { display: block; font-size: 28px; font-weight: 600; line-height: 1.25; }
+
+/* Column chart: slots across, a stack of segments in each, gridlines behind. The whole slot is the hover target. */
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.key { flex: none; display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.s1 { background: var(--series-1); }
+.s2 { background: var(--series-2); }
+.cols { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 160px auto; column-gap: 8px; row-gap: 6px; padding-top: 18px; }
+.yaxis { position: relative; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.yaxis span { position: absolute; right: 0; transform: translateY(50%); line-height: 1; }
+.plot { position: relative; }
+.grid i { position: absolute; left: 0; right: 0; height: 1px; background: var(--line); }
+.grid i:first-child { background: var(--axis); }
+.slots { position: absolute; inset: 0; display: flex; }
+.slot { position: relative; flex: 1; min-width: 0; display: flex; justify-content: center; border-radius: 4px 4px 0 0; }
+.slot:hover, .slot:focus-visible { background: color-mix(in srgb, var(--fg) 6%, transparent); outline: none; }
+.stack { width: min(24px, 68%); min-width: 2px; height: 100%; display: flex; flex-direction: column-reverse; gap: 2px; }
+.seg { flex: none; min-height: 2px; }
+.seg:last-child { border-radius: 4px 4px 0 0; }
+.peak { position: absolute; left: 50%; transform: translateX(-50%); font-size: 12px; font-weight: 600; line-height: 1; white-space: nowrap; pointer-events: none; }
+.xaxis { grid-column: 2; display: flex; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.xaxis span { flex: 1; min-width: 0; display: flex; justify-content: center; white-space: nowrap; }
+
+/* Bars for named things: label, bar, value at the tip. One color: the names are not a scale. */
+.bars { display: flex; flex-direction: column; gap: 4px; }
+.brow { display: grid; grid-template-columns: minmax(0, 11em) minmax(0, 1fr); align-items: center; gap: 10px; padding: 3px 4px; margin-inline: -4px; border-radius: 6px; font-size: 14px; }
+.brow:hover, .brow:focus-visible { background: color-mix(in srgb, var(--fg) 6%, transparent); outline: none; }
+.blabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btrack { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bar { flex: none; height: 12px; min-width: 2px; background: var(--series-1); border-radius: 0 4px 4px 0; }
+.bval { font-size: 13px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bval b { color: var(--fg); font-weight: 600; }
+
+/* Tables */
+.scroll { overflow-x: auto; margin-inline: -16px; padding-inline: 16px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; vertical-align: top; }
+th { font-size: 13px; font-weight: 500; color: var(--muted); }
+th:first-child, td:first-child { text-align: left; white-space: normal; overflow-wrap: anywhere; }
+table.wide td:first-child { min-width: 11em; } /* many columns: the name keeps its room and the table scrolls sideways on a phone */
+th:last-child, td:last-child { padding-right: 0; }
+tr:last-child td { border-bottom: 0; }
+.tag { font-size: 12px; color: var(--muted); background: var(--accent-soft); border-radius: 5px; padding: 0 6px; margin-left: 6px; white-space: nowrap; }
+details summary { cursor: pointer; font-size: 13px; color: var(--muted); width: max-content; }
+details[open] summary { margin-bottom: 8px; }
+
+#tip { position: absolute; z-index: 10; pointer-events: none; background: var(--fg); color: var(--bg); border-radius: 8px; padding: 8px 10px; font-size: 13px; line-height: 1.5; max-width: 260px; box-shadow: 0 4px 16px rgba(0, 0, 0, .18); }
+#tip .tt { opacity: .75; }
+#tip .tr { display: flex; align-items: center; gap: 6px; }
+#tip .tr strong { font-weight: 600; font-variant-numeric: tabular-nums; }
+#tip .key { width: 12px; height: 3px; border-radius: 2px; }
+
+@media (max-width: 720px) {
+  .pair { grid-template-columns: minmax(0, 1fr); }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .brow { grid-template-columns: minmax(0, 1fr); gap: 0; } /* on a phone the name sits above its bar, in full */
+  .blabel { white-space: normal; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1><img class="logo" src="logo.png" alt="" width="40" height="40"><span>访问数据</span></h1>
+      <p id="meta">只有管理员浏览器能看到。</p>
+    </div>
+    <a class="btn" href="./">← 回到网站</a>
+  </header>
+  <div class="filters"><div class="tabs" id="range" role="group" aria-label="时间范围"></div></div>
+  <main id="main"></main>
+</div>
+<div id="tip" role="tooltip" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js?v=1"></script>
+<script src="stats.js?v=1"></script>
+</body>
+</html>

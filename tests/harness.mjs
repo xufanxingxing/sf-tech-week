@@ -11,6 +11,12 @@ export const HTML = readFileSync(new URL("index.html", root), "utf8");
 export const SOURCE = readFileSync(new URL("app.js", root), "utf8");
 const PAGE = HTML.replace(/<script\b[^>]*\bsrc=[^>]*><\/script>/g, "");
 const APP = new vm.Script(SOURCE, { filename: "app.js" });
+// The admin's numbers page, loaded with boot(t, { page: "stats" }).
+const strip = (html) => html.replace(/<script\b[^>]*\bsrc=[^>]*><\/script>/g, "");
+const PAGES = {
+  index: [PAGE, APP],
+  stats: [strip(readFileSync(new URL("stats.html", root), "utf8")), new vm.Script(readFileSync(new URL("stats.js", root), "utf8"), { filename: "stats.js" })],
+};
 
 export const KEY = "key-of-this-browser";
 export const plain = (v) => JSON.parse(JSON.stringify(v)); // a copy of a page object that assert can compare
@@ -43,6 +49,7 @@ function backend(seed) {
     techweek_comments: (seed.comments || []).map((c) => ({ id: ++id, ...c })),
     techweek_admins: (seed.admins || []).map((person_key) => ({ person_key })), // browsers that may delete anything
     techweek_admin_requests: [],
+    techweek_activity: [], // what the page reported for product analytics
   };
   const calls = [];          // every request the app sent, in order
   const failing = new Set(); // table or function names that answer with an error
@@ -69,6 +76,15 @@ function backend(seed) {
     techweek_my_added: ({ p_key }) => [...(admin(p_key) ? [ADMIN] : []), ...db.techweek_events.filter((e) => e.added_key === p_key).map((e) => e.id)],
     techweek_my_comments: ({ p_key }) => db.techweek_comments.filter((c) => c.person_key === p_key || admin(p_key)).map((c) => c.id),
     techweek_is_admin: ({ p_key }) => admin(p_key),
+    techweek_track({ p_key, p_action, p_event, p_props }) {
+      check(len(p_key, 16, 64), "activity.person_key");
+      check(/^[a-z_]{2,24}$/.test(p_action), "activity.action");
+      const props = p_props ?? {};
+      check(typeof props === "object" && !Array.isArray(props) && JSON.stringify(props).length <= 400, "activity.props");
+      db.techweek_activity.push({ id: ++id, person_key: p_key, action: p_action, event_id: p_event, props: JSON.parse(JSON.stringify(props)) });
+    },
+    // only an admin gets the summary; the test supplies it as `stats`, either the answer or a function of the days asked for
+    techweek_stats: ({ p_key, p_days }) => (admin(p_key) ? (typeof seed.stats === "function" ? seed.stats(p_days) : seed.stats) : null),
     techweek_request_admin({ p_key, p_code, p_name }) {
       check(len(p_key, 16, 64), "admin_requests.person_key");
       check(/^[0-9]{6}$/.test(p_code), "admin_requests.code");
@@ -137,7 +153,7 @@ function backend(seed) {
           range(a, b) { range = [a, b]; return q; },
           then: (res, rej) => reply(table, { op: "select", table, columns, range, where }, () => {
             const cols = columns.split(",");
-            check(!table.startsWith("techweek_admin") && !cols.some((c) => SECRET.has(c)), "read privileges");
+            check(!table.startsWith("techweek_admin") && table !== "techweek_activity" && !cols.some((c) => SECRET.has(c)), "read privileges");
             const found = db[table].filter((r) => tests.every((ok) => ok(r)));
             const rows = range ? found.slice(range[0], range[1] + 1) : found.slice(0, 1000); // the server never sends more than 1000 rows at once
             return rows.map((r) => Object.fromEntries(cols.map((c) => [c, r[c]])));
@@ -156,13 +172,15 @@ function backend(seed) {
     // hold("techweek_rsvps") keeps answers to that table or function back until the returned function is called
     hold(name) { let release; held.set(name, new Promise((r) => (release = r))); return () => { held.delete(name); release(); }; },
     rpcsSent: (name) => calls.filter((c) => c.op === "rpc" && c.name === name).map((c) => c.args),
+    // what was recorded for analytics, as [action, event id, props], optionally only one action
+    tracked: (action) => db.techweek_activity.filter((a) => !action || a.action === action).map((a) => [a.action, a.event_id, a.props]),
   };
 }
 
 // boot(t, { name, events, rsvps, comments, admins, ... }) loads the page and waits for the first refresh. The window closes when test t ends.
 export async function boot(t, { name = "", key = KEY, config = { supabaseUrl: "https://db.test", supabaseKey: "anon-key" },
-  client = true, width = Infinity, panel = 0, innerWidth = 1024, hash = "", setup = null, failing = [], holding = [], ...seed } = {}) {
-  const dom = new JSDOM(PAGE, { runScripts: "outside-only", url: "https://techweek.test/" + hash, pretendToBeVisual: true });
+  client = true, width = Infinity, panel = 0, innerWidth = 1024, hash = "", search = "", referrer = undefined, page = "index", setup = null, failing = [], holding = [], ...seed } = {}) {
+  const dom = new JSDOM(PAGES[page][0], { runScripts: "outside-only", url: "https://techweek.test/" + search + hash, referrer, pretendToBeVisual: true });
   const { window } = dom, { document } = window, ctx = dom.getInternalVMContext();
   t.after(() => window.close());
   const api = backend(seed);
@@ -219,7 +237,7 @@ export async function boot(t, { name = "", key = KEY, config = { supabaseUrl: "h
   if (client) window.supabase = { createClient: (url, anon, options) => { api.calls.push(JSON.parse(JSON.stringify({ op: "connect", url, anon, options }))); return api.client; } };
   if (setup) setup(window);
 
-  APP.runInContext(ctx);
+  PAGES[page][1].runInContext(ctx);
   await flush();
 
   const $ = (s, el = document) => el.querySelector(s), $$ = (s, el = document) => [...el.querySelectorAll(s)];

@@ -42,7 +42,8 @@ const state = {
   key: store.get("tw.key"),
   busy: new Set(),
 };
-if (!state.key) { state.key = newKey(); store.set("tw.key", state.key); }
+const firstTime = !state.key; // nothing saved in this browser yet: a new visitor
+if (firstTime) { state.key = newKey(); store.set("tw.key", state.key); }
 let sb = null;
 let afterName = null;
 
@@ -117,7 +118,7 @@ function renderList() {
     if (!days.includes(state.day)) state.day = days.includes(today()) ? today() : days[0] || null;
     const q = state.query.trim().toLowerCase();
     $("#days").replaceChildren(...days.map((d) => { const l = dayLabel(d); return h("button", { class: "tab", type: "button",
-      "aria-pressed": String(!q && d === state.day), text: `${l.sub} ${d.slice(8).replace(/^0/, "")}`, onclick: () => { state.day = d; state.query = $("#search").value = ""; render(); } }); }));
+      "aria-pressed": String(!q && d === state.day), text: `${l.sub} ${d.slice(8).replace(/^0/, "")}`, onclick: () => { state.day = d; state.query = $("#search").value = ""; render(); track("day", null, { day: d }); } }); }));
     sessions = q ? sessions.filter((x) => [x.ev.name, x.ev.hosts, x.ev.addedBy, x.ev.where, x.ev.intro].some((t) => t && t.toLowerCase().includes(q)))
       : sessions.filter((x) => x.s.date === state.day);
     $("#src").replaceChildren(q ? `找到 ${sessions.length} 个` : `这一天 ${sessions.length} 个`, ` · ${state.calendar.length} 个来自 `,
@@ -207,7 +208,7 @@ function card(ev, s, i) {
       ev.sessions.length > 1 ? h("i", { text: `· 第 ${i + 1}/${ev.sessions.length} 天` }) : null),
     h("div", { class: "main" },
       h("div", { class: "head" },
-        h("h3", {}, url ? h("a", { href: url, target: "_blank", rel: "noopener noreferrer", title: "打开报名页面" }, ev.name, h("span", { class: "ext", "aria-hidden": "true", text: " ↗" })) : ev.name),
+        h("h3", {}, url ? h("a", { href: url, target: "_blank", rel: "noopener noreferrer", title: "打开报名页面", onclick: () => track("open_link", ev.id) }, ev.name, h("span", { class: "ext", "aria-hidden": "true", text: " ↗" })) : ev.name),
         ev.curated ? h("span", { class: "badge", text: "群主推荐" }) : null,
         ev.featured ? h("span", { class: "badge official", text: "官方精选" }) : null),
       h("div", { class: "by" }, icon(PERSON), h("span", { text: ev.calendar ? "主办：" + (ev.hosts || "未注明") : ev.addedBy + " 推荐" })),
@@ -235,7 +236,7 @@ function openPeople(id) {
   if (id && state.drawer) openDrawer(null);
   state.people = id;
   render();
-  if (id) $("#pClose").focus();
+  if (id) { $("#pClose").focus(); track("open_people", id); }
 }
 
 function renderPeople() {
@@ -271,7 +272,7 @@ function openDrawer(id) {
   if (id) state.people = null; // one panel at a time
   input.value = id ? state.drafts.get(id) || "" : "";
   render();
-  if (id) input.focus();
+  if (id) { input.focus(); track("open_comments", id); }
 }
 
 // The panel's input lives outside the list so refreshes never touch what is being typed.
@@ -299,6 +300,7 @@ async function sendComment() {
   if (error) { toast("留言没发出去，请再试一次。"); return; }
   if (state.drawer === id) input.value = ""; // by now the box may hold what is being typed for another event
   state.drafts.delete(id);
+  track("comment", id);
   await refresh();
   input.focus();
 }
@@ -419,9 +421,10 @@ function askName(then) {
   $("#nName").focus();
 }
 async function setName(name) {
-  const changed = name !== state.name;
+  const changed = name !== state.name, unnamed = !state.name;
   state.name = name; store.set("tw.name", name); render();
   if (!changed || !sb) return;
+  if (unnamed) track("set_name");
   const { error } = await sb.rpc("techweek_rename_me", { p_key: state.key, p_name: name });
   if (error) toast("名字没改成功，请再试一次。");
   await refresh();
@@ -433,7 +436,7 @@ async function setStatus(ev, status) {
   const next = state.mine.get(ev.id) === status ? null : status; // clicking the active one clears it
   state.busy.add(ev.id); render();
   const { error } = await sb.rpc("techweek_set_status", { p_event: ev.id, p_key: state.key, p_name: state.name, p_status: next });
-  if (error) toast("没保存成功，请再试一次。");
+  if (error) toast("没保存成功，请再试一次。"); else track("mark", ev.id, { status: next || "none" });
   await refresh();
   state.busy.delete(ev.id); render();
 }
@@ -451,11 +454,18 @@ async function removeEvent(ev) {
   await refresh();
 }
 
-$("#tabPicks").onclick = () => { state.filter = "picks"; render(); };
-$("#tabAll").onclick = () => { state.filter = "all"; render(); if (sb) loadCalendar(); };
+$("#tabPicks").onclick = () => { state.filter = "picks"; render(); track("tab"); };
+$("#tabAll").onclick = () => { state.filter = "all"; render(); if (sb) loadCalendar(); track("tab"); };
 $("#search").addEventListener("input", () => { state.query = $("#search").value; renderList(); });
-$("#tabMine").onclick = () => { state.filter = "mine"; render(); };
+// What people look for, recorded once they pause typing.
+let searchTimer;
+$("#search").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { const q = state.query.trim(); if (q) track("search", null, { q: q.slice(0, 40) }); }, 1500);
+});
+$("#tabMine").onclick = () => { state.filter = "mine"; render(); track("tab"); };
 $("#addBtn").onclick = () => {
+  track("add_open");
   $("#eventErr").hidden = true;
   if (!$("#fBy").value) $("#fBy").value = state.name;
   $("#eventDlg").showModal();
@@ -529,8 +539,31 @@ $("#eventForm").addEventListener("submit", async (e) => {
   for (const id of ["#fName", "#fLink", "#fDate", "#fStart", "#fEnd", "#fWhere", "#fWhy"]) $(id).value = "";
   for (const row of [...$("#dates").querySelectorAll(".row.extra")]) row.remove();
   toast("已添加");
+  track("add_event", null, { days: sessions.length });
   refresh();
 });
+
+// Product analytics: what this browser does goes to techweek_track, which only the database owner and admin browsers can read.
+// Never awaited and never allowed to fail out loud, so it cannot get in a visitor's way.
+function track(action, eventId, props) {
+  if (!sb) return;
+  try {
+    sb.rpc("techweek_track", { p_key: state.key, p_action: action, p_event: eventId || null, p_props: { tab: state.filter, ...props } })
+      .then(() => {}, () => {});
+  } catch {}
+}
+// A visit is the page being opened, or looked at again after half an hour in the background.
+function visit(first) {
+  const url = new URL(location.href);
+  let ref = "";
+  try { if (document.referrer) ref = new URL(document.referrer).hostname; } catch {}
+  track("visit", null, {
+    first, named: !!state.name, ref: ref === location.hostname ? "" : ref.slice(0, 60),
+    from: (url.searchParams.get("from") || url.searchParams.get("utm_source") || "").slice(0, 40), // share the link as ?from=群名 to tell channels apart
+    device: /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? "mobile" : "desktop",
+    wechat: /MicroMessenger/i.test(navigator.userAgent), w: window.innerWidth,
+  });
+}
 
 // Opening the site at #admin asks to make this browser an admin; whoever runs the database approves it by the code shown.
 async function adminPairing() {
@@ -538,7 +571,11 @@ async function adminPairing() {
   const box = $("#notice"), say = (msg) => { box.textContent = msg; box.hidden = false; };
   const { data: isAdmin, error } = await sb.rpc("techweek_is_admin", { p_key: state.key });
   if (error) return say("现在查不到管理员状态，请刷新再试。");
-  if (isAdmin) { store.set("tw.adminCode", ""); return say("这台浏览器是管理员：每个活动右下角都有“删除”，也可以删任何留言。"); }
+  if (isAdmin) {
+    store.set("tw.adminCode", "");
+    say("这台浏览器是管理员：每个活动右下角都有“删除”，也可以删任何留言。");
+    return box.append(" ", h("a", { href: "stats.html", text: "看访问数据 →" }));
+  }
   let [code, at] = (store.get("tw.adminCode") || "").split(":");
   if (!code || Date.now() - Number(at) > 20 * 60 * 1000) {
     code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, "0");
@@ -557,6 +594,13 @@ function boot() {
   sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, { auth: { persistSession: false } });
   refresh();
   adminPairing();
+  visit(firstTime);
+  let away = 0; // when the tab was last put in the background
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { away = Date.now(); return; }
+    if (away && Date.now() - away > 30 * 60 * 1000) visit(false);
+    away = 0;
+  });
   // Other people's changes show up within 20 seconds, or as soon as the tab is looked at again.
   setInterval(() => { if (!document.hidden) refresh(); }, 20000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refresh(); });
