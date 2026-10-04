@@ -234,3 +234,25 @@ grant execute on function public.techweek_is_admin, public.techweek_request_admi
 -- 群主后来撤下的两个活动
 delete from public.techweek_events
 where link in ('https://partiful.com/e/con6v0i0cwPvODNG0l2T', 'https://partiful.com/e/jvRWNlc4IBvo2E1k7Rpj');
+
+alter table public.techweek_events
+  add column source text not null default 'community' check (source in ('community', 'calendar')),
+  add column tw_id uuid unique,
+  add column hosts text check (hosts is null or char_length(hosts) <= 300),
+  add column featured boolean not null default false,
+  alter column why drop not null;
+grant select (source, hosts, featured) on public.techweek_events to anon;
+create index techweek_events_source_idx on public.techweek_events (source, date, start_time);
+
+-- 访客添加的活动只能是普通推荐：必须写理由，不能冒充官方日历的条目。
+drop policy "anyone adds events" on public.techweek_events;
+create policy "anyone adds events" on public.techweek_events for insert to anon
+  with check (curated = false and source = 'community' and tw_id is null and featured = false and why is not null);
+
+-- 管理员不再拿到全部活动的 id（会超过一次返回的行数上限），而是拿到一个全零的标记，网页据此显示所有删除键。
+create or replace function public.techweek_my_added(p_key text)
+returns setof uuid language sql stable security definer set search_path = public as $$
+  select '00000000-0000-0000-0000-000000000000'::uuid where exists (select 1 from techweek_admins a where a.person_key = p_key)
+  union all
+  select id from techweek_events where added_key = p_key
+$$;
