@@ -75,6 +75,15 @@ button { cursor: pointer; }
 .me { color: var(--muted); font-size: 13px; }
 .link { border: 0; background: none; padding: 0; color: var(--fg); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
 
+.topics { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: -6px; }
+.topic { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 3px 11px; font-size: 13px; white-space: nowrap; }
+.topic small { margin-left: 5px; font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.topic:hover { border-color: var(--muted); }
+.topic[aria-pressed="true"] { background: var(--tint); border-color: var(--tint-line); color: var(--tint-fg); font-weight: 500; }
+.topic[aria-pressed="true"] small { color: inherit; opacity: .7; }
+.topics .link { font-size: 13px; color: var(--muted); margin-left: 4px; }
+.tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.tag { font-size: 12px; line-height: 1.7; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; white-space: nowrap; }
 .allbar { display: flex; flex-direction: column; gap: 10px; }
 .days { display: flex; flex-wrap: wrap; gap: 4px; }
 .days .tab { border: 1px solid var(--line); background: var(--surface); font-variant-numeric: tabular-nums; }
@@ -197,6 +206,7 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
     <button class="btn primary" id="addBtn" type="button">＋ 添加活动</button>
   </header>
 
+  <div class="topics" id="topics" role="group" aria-label="按主题筛选" hidden></div>
   <div class="bar">
     <div class="tabs" role="group" aria-label="筛选">
       <button class="tab" id="tabPicks" type="button" aria-pressed="true">推荐</button>
@@ -277,7 +287,7 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
 <div id="toast" role="status" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=22"></script>
-<script src="app.js?v=22"></script>
+<script src="config.js?v=23"></script>
+<script src="app.js?v=23"></script>
 </body>
 </html>

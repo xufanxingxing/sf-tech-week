@@ -386,6 +386,117 @@ describe("“全部”: the official calendar", () => {
   });
 });
 
+describe("topics", () => {
+  const chips = (x) => x.$$("#topics .topic").map((b) => b.textContent + (b.getAttribute("aria-pressed") === "true" ? "*" : ""));
+  const chip = (x, label) => x.$$("#topics .topic").find((b) => b.textContent.startsWith(label));
+  const tags = (x, title) => x.$$(".tag", x.card(title)).map((s) => s.textContent);
+  function four(t, more = {}) {
+    return boot(t, { ...more, events: [
+      event({ name: "Alpha", topics: ["agent", "founder"] }),
+      event({ name: "Beta", topics: ["founder"] }),
+      event({ name: "Gamma", topics: ["hackathon"] }),
+      event({ name: "Plain", topics: [] }),
+      ...(more.events || []),
+    ] });
+  }
+
+  test("above the tabs sits a chip for each topic the tab's events have, in a fixed order, with how many", async (t) => {
+    const x = await four(t);
+    assert.deepEqual(chips(x), ["Agent1", "创业2", "黑客松1"]);
+    assert.equal(x.$("#topics").nextElementSibling, x.$(".bar"));
+    assert.deepEqual(titles(x), ["Alpha", "Beta", "Gamma", "Plain"]);
+  });
+
+  test("pressing a chip shows only events with that topic, and pressing it again shows everything", async (t) => {
+    const x = await four(t);
+    await x.click(chip(x, "创业"));
+    assert.deepEqual(chips(x), ["Agent1", "创业2*", "黑客松1"]);
+    assert.deepEqual(titles(x), ["Alpha", "Beta"]);
+    assert.equal(x.$("#stats").textContent, "2 个活动");
+    await x.click(chip(x, "创业"));
+    assert.deepEqual(titles(x), ["Alpha", "Beta", "Gamma", "Plain"]);
+    assert.equal(x.$("#stats").textContent, "4 个活动");
+  });
+
+  test("with several chips on, an event with any of those topics shows", async (t) => {
+    const x = await four(t);
+    await x.click(chip(x, "Agent"));
+    await x.click(chip(x, "黑客松"));
+    assert.deepEqual(chips(x), ["Agent1*", "创业2", "黑客松1*"]);
+    assert.deepEqual(titles(x), ["Alpha", "Gamma"]);
+    assert.deepEqual(x.tracked("topic").map((c) => c[2]), [{ tab: "picks", topic: "agent", on: true }, { tab: "picks", topic: "hackathon", on: true }]);
+  });
+
+  test("“清除” appears once a chip is on and switches them all off", async (t) => {
+    const x = await four(t);
+    assert.equal(x.button(x.$("#topics"), "清除"), undefined);
+    await x.click(chip(x, "Agent"));
+    await x.click(x.button(x.$("#topics"), "清除"));
+    assert.deepEqual(chips(x), ["Agent1", "创业2", "黑客松1"]);
+    assert.equal(x.$$(".event").length, 4);
+  });
+
+  test("a card lists its topics by name, and an event without any has no row for them", async (t) => {
+    const x = await four(t);
+    assert.deepEqual(tags(x, "Alpha"), ["Agent", "创业"]);
+    assert.equal(x.$(".tags", x.card("Plain")), null);
+  });
+
+  test("an event without stored topics is matched on its name and reason; stored topics nobody knows are dropped", async (t) => {
+    const x = await four(t, { events: [
+      event({ name: "Robot night", why: "和做机器人的创始人聊聊", topics: null }),
+      event({ name: "Odd", topics: ["agent", "no-such-topic"] }),
+    ] });
+    assert.deepEqual(tags(x, "Robot night"), ["Physical AI", "创业"]);
+    assert.deepEqual(tags(x, "Odd"), ["Agent"]);
+  });
+
+  test("the choice carries over to “我标记的”, where a chosen topic nobody has stays at 0 so it can be switched off", async (t) => {
+    const mine = event({ name: "Mine", topics: ["founder"] });
+    const x = await four(t, { name: "stella", events: [mine], rsvps: [rsvp(mine.id, "stella", "going", KEY)] });
+    await x.click(chip(x, "黑客松"));
+    await x.click(x.$("#tabMine"));
+    assert.deepEqual(chips(x), ["创业1", "黑客松0*"]);
+    assert.match(listText(x), /没有符合所选主题的活动/);
+    await x.click(x.button(x.$("#list"), "清除主题筛选"));
+    assert.deepEqual(titles(x), ["Mine"]);
+  });
+
+  test("the filter stays on through the regular refresh", async (t) => {
+    const x = await four(t);
+    await x.click(chip(x, "黑客松"));
+    await x.tick(20000);
+    assert.deepEqual(titles(x), ["Gamma"]);
+  });
+
+  test("in “全部” the chips count the calendar too and work together with the day and the search", async (t) => {
+    const cal = (over) => event({ source: "calendar", why: null, hosts: "a16z", ...over });
+    const x = await four(t, { events: [
+      cal({ name: "Agent breakfast", date: "2026-10-05", topics: ["agent"] }),
+      cal({ name: "Agent faire", date: "2026-10-09", topics: ["agent", "funding"] }),
+    ] });
+    assert.deepEqual(chips(x), ["Agent1", "创业2", "黑客松1"]);
+    await x.click(x.$("#tabAll"));
+    assert.deepEqual(chips(x), ["Agent3", "创业2", "融资1", "黑客松1"]);
+    await x.click(chip(x, "Agent"));
+    assert.equal(x.$("#stats").textContent, "3 个活动");
+    assert.deepEqual(titles(x), ["Agent breakfast", "Alpha"]);
+    await x.click(x.$$("#days button")[1]);
+    assert.deepEqual(titles(x), ["Agent faire"]);
+    x.type(x.$("#search"), "breakfast"); x.$("#search").dispatchEvent(new x.window.Event("input")); await x.flush();
+    assert.deepEqual(titles(x), ["Agent breakfast"]);
+  });
+
+  test("the chips are hidden until there is something to count", async (t) => {
+    const x = await boot(t, { events: [event({ name: "Later", topics: ["agent"] })], holding: ["techweek_events"] });
+    assert.equal(x.$("#topics").hidden, true);
+    x.release.techweek_events(); await x.flush();
+    assert.equal(x.$("#topics").hidden, false);
+    const y = await boot(t);
+    assert.equal(y.$("#topics").hidden, true);
+  });
+});
+
 describe("who I am", () => {
   test("with a name saved the bar shows it and offers to change it", async (t) => {
     const x = await boot(t, { name: "stella" });

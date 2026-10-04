@@ -30,6 +30,7 @@ const state = {
   notes: new Map(),    // event id -> comments, from the last load
   day: null,           // the day shown in "全部"
   query: "",           // what is typed in the "全部" search box
+  topics: new Set(),   // topic filters that are switched on; none means no filter
   mine: new Map(),     // event id -> this browser's status on it
   added: new Set(),    // ids of events this browser added, which it may delete
   confirming: null,    // event id awaiting delete confirmation
@@ -54,6 +55,33 @@ const STATUSES = [
 ];
 const ADMIN = "00000000-0000-0000-0000-000000000000"; // in the list of events this browser may delete, it means: all of them
 const MAX_SHOWN = 300; // cards drawn for one search
+// The topics events can be filtered by, in the order their chips appear. `rx` is for events that come without stored topics.
+const TOPICS = [
+  { key: "agent", label: "Agent", rx: /\bagent(s|ic)?\b|\bmcp\b|智能体/i },
+  { key: "physical", label: "Physical AI", rx: /physical ai|robot|humanoid|embodied|world model|机器人|具身/i },
+  { key: "infra", label: "AI 基础设施", rx: /\bgpus?\b|inference|\bcompute\b|data ?cent(er|re)|\bchips?\b|semiconductor|算力|推理|芯片|基础设施/i },
+  { key: "evals", label: "评测", rx: /\bevals?\b|benchmark|评测/i },
+  { key: "voice", label: "Voice AI", rx: /\bvoice\b|speech|语音/i },
+  { key: "founder", label: "创业", rx: /founder|startup|创始人|创业/i },
+  { key: "funding", label: "融资", rx: /investor|fundrais|\bvcs?\b|融资|投资/i },
+  { key: "gtm", label: "GTM", rx: /\bgtm\b|go-to-market|增长|销售/i },
+  { key: "consumer", label: "消费/创意", rx: /consumer|creator|消费|创意|创作者/i },
+  { key: "health", label: "医疗", rx: /health|medic|pharma|医疗|医学/i },
+  { key: "fintech", label: "金融科技", rx: /fintech|payments?\b|金融科技|支付/i },
+  { key: "hackathon", label: "黑客松", rx: /hackathon|buildathon|黑客松/i },
+  { key: "global", label: "出海", rx: /international|cross-border|出海|跨境|国际/i },
+  { key: "women", label: "女性", rx: /\bwomen\b|female|女性/i },
+  { key: "sports", label: "运动社交", rx: /run club|padel|yoga|pickleball|跑步|骑行/i },
+  { key: "security", label: "安全/国防", rx: /security|cyber|defen[sc]e|安全|国防/i },
+  { key: "deeptech", label: "Deep Tech", rx: /deep ?tech|深科技/i },
+];
+const TOPIC_LABEL = Object.fromEntries(TOPICS.map((t) => [t.key, t.label]));
+// Topics are stored for the calendar's events and the group owner's picks; an event a visitor added is matched on its own words.
+function topicsOf(e) {
+  if (Array.isArray(e.topics)) return e.topics.filter((k) => k in TOPIC_LABEL);
+  const words = `${e.name} ${e.why || ""}`;
+  return TOPICS.filter((t) => t.rx.test(words)).map((t) => t.key);
+}
 const MAX_CHIPS = 5; // names shown on a card before the rest move into the panel
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/, TIME_RE = /^\d{2}:\d{2}$/;
 const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
@@ -91,6 +119,7 @@ function renderList() {
 
   const list = $("#list"); list.replaceChildren();
   $("#stats").hidden = true; // the count under the tabs, shown once there are events to count
+  $("#topics").hidden = true;
   if (state.status === "loading") { list.append(h("div", { class: "empty", text: "正在加载活动…" })); return; }
   if (state.status === "setup") { list.append(h("div", { class: "empty" }, h("strong", { text: "网站还在设置中" }), "活动列表很快上线，晚点再来看看。")); return; }
   if (state.status === "unavailable") {
@@ -108,7 +137,9 @@ function renderList() {
     return;
   }
 
-  const events = all ? everything() : state.filter === "mine" ? everything().filter((ev) => state.mine.has(ev.id)) : state.events;
+  const scope = all ? everything() : state.filter === "mine" ? everything().filter((ev) => state.mine.has(ev.id)) : state.events;
+  renderTopics(scope);
+  const events = state.topics.size ? scope.filter((ev) => ev.topics.some((k) => state.topics.has(k))) : scope; // any of the chosen topics
   $("#stats").textContent = `${events.length} 个活动`;
   $("#stats").hidden = !events.length;
   let sessions = events.flatMap((ev) => ev.sessions.map((s, i) => ({ ev, s, i })));
@@ -127,7 +158,9 @@ function renderList() {
   }
   const shown = sessions.sort((x, y) => (x.s.date + x.s.start + x.ev.name).localeCompare(y.s.date + y.s.start + y.ev.name)).slice(0, cut ? MAX_SHOWN : undefined);
   if (!shown.length) {
-    list.append(state.filter === "mine"
+    list.append(scope.length && !events.length
+      ? h("div", { class: "empty" }, h("strong", { text: "没有符合所选主题的活动" }), h("button", { class: "link", type: "button", text: "清除主题筛选", onclick: clearTopics }))
+      : state.filter === "mine"
       ? h("div", { class: "empty" }, h("strong", { text: "你还没标记任何活动" }), "在“推荐”或“全部”里点“我会去”“等待通过”或“感兴趣”，这里就是你的日程。")
       : all ? h("div", { class: "empty" }, h("strong", { text: "没有找到活动" }), "换个关键词，或者点上面的日期。")
       : h("div", { class: "empty" }, h("strong", { text: "还没有活动" }), "点右上角“添加活动”，放上第一个值得去的。"));
@@ -147,6 +180,23 @@ function renderList() {
   if (cut) list.append(h("p", { class: "src", text: `只显示前 ${MAX_SHOWN} 个，一共找到 ${cut} 个。再多打几个字缩小范围。` }));
   fitGoing();
 }
+
+// The topic chips above the tabs: one for each topic found among the tab's events, with how many have it. Pressing one filters.
+function renderTopics(scope) {
+  const count = new Map();
+  for (const ev of scope) for (const k of ev.topics) count.set(k, (count.get(k) || 0) + 1);
+  const chips = TOPICS.filter((t) => count.has(t.key) || state.topics.has(t.key)).map((t) => h("button", { class: "topic", type: "button",
+    "aria-pressed": String(state.topics.has(t.key)), onclick: () => {
+      const on = !state.topics.delete(t.key);
+      if (on) state.topics.add(t.key);
+      render(); track("topic", null, { topic: t.key, on });
+    } },
+    t.label, h("small", { text: String(count.get(t.key) || 0) })));
+  if (state.topics.size) chips.push(h("button", { class: "link", type: "button", text: "清除", onclick: clearTopics }));
+  $("#topics").replaceChildren(...chips);
+  $("#topics").hidden = !chips.length;
+}
+function clearTopics() { state.topics.clear(); render(); }
 
 // Every event this page has: the recommended ones, then calendar ones it has loaded, each once.
 function everything() {
@@ -211,6 +261,7 @@ function card(ev, s, i) {
         h("h3", {}, url ? h("a", { href: url, target: "_blank", rel: "noopener noreferrer", title: "打开报名页面", onclick: () => track("open_link", ev.id) }, ev.name, h("span", { class: "ext", "aria-hidden": "true", text: " ↗" })) : ev.name),
         ev.curated ? h("span", { class: "badge", text: "群主推荐" }) : null,
         ev.featured ? h("span", { class: "badge official", text: "官方精选" }) : null),
+      ev.topics.length ? h("div", { class: "tags" }, ev.topics.map((k) => h("span", { class: "tag", text: TOPIC_LABEL[k] }))) : null,
       h("div", { class: "by" }, icon(PERSON), h("span", { text: ev.calendar ? "主办：" + (ev.hosts || "未注明") : ev.addedBy + " 推荐" })),
       h("div", { class: "where" }, icon(PIN), h("span", { text: ev.where })),
       ev.intro ? h("p", { class: "intro", text: ev.intro }) : null,
@@ -339,7 +390,7 @@ function refresh() {
     render();
   })());
 }
-const COLUMNS = "id,name,link,date,start_time,end_time,extra_dates,location,why,added_by,curated,source,hosts,featured,intro";
+const COLUMNS = "id,name,link,date,start_time,end_time,extra_dates,location,why,added_by,curated,source,hosts,featured,intro,topics";
 const toEvent = (e) => ({
   id: e.id, name: e.name, link: e.link,
   sessions: [{ date: e.date, start: e.start_time.slice(0, 5), end: e.end_time ? e.end_time.slice(0, 5) : "" },
@@ -347,6 +398,7 @@ const toEvent = (e) => ({
       .map((x) => ({ date: x.date, start: x.start, end: TIME_RE.test(x.end) ? x.end : "" }))],
   where: e.location, why: e.why, addedBy: e.added_by, curated: e.curated,
   calendar: e.source === "calendar", hosts: e.hosts || "", featured: !!e.featured, intro: e.intro || "",
+  topics: topicsOf(e),
   goers: state.goers.get(e.id) || [],
   comments: state.notes.get(e.id) || [],
 });

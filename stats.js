@@ -24,7 +24,7 @@ let sb = null, key = null, asked = 0;
 const RANGES = [[1, "今天"], [7, "7 天"], [14, "14 天"], [30, "30 天"], [90, "90 天"]];
 // The action names app.js records, in words. One it does not know yet is shown by its name.
 const ACTIONS = {
-  visit: "打开网站", tab: "切换标签页", day: "在“全部”里换日期", search: "搜索", open_link: "点开报名链接", mark: "标记或取消标记",
+  visit: "打开网站", tab: "切换标签页", day: "在“全部”里换日期", search: "搜索", topic: "点主题筛选", open_link: "点开报名链接", mark: "标记或取消标记",
   open_comments: "打开留言", comment: "发留言", open_people: "打开已标记名单", add_open: "打开“添加活动”", add_event: "添加了活动", set_name: "第一次填名字",
 };
 const TABS = { picks: "推荐", all: "全部", mine: "我标记的" };
