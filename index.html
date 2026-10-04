@@ -81,6 +81,7 @@ button { cursor: pointer; }
 .days .tab[aria-pressed="true"] { background: var(--fg); border-color: var(--fg); color: var(--bg); box-shadow: none; }
 .search { width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 12px; font-size: 15px; }
 .src { margin: 0; font-size: 13px; color: var(--muted); }
+#stats { margin-block: -10px; }
 .src a { color: inherit; text-underline-offset: 3px; }
 .intro { margin: 2px 0 0; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
 .badge.official { color: var(--muted); background: var(--accent-soft); }
@@ -191,7 +192,7 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
   <header class="top">
     <div>
       <h1><img class="logo" src="logo.png" alt="" width="40" height="40"><span>Stoody AI: Tech Week 去哪儿</span></h1>
-      <p id="stats">SF Tech Week 值得去的活动，和群里谁会去。</p>
+      <p>SF Tech Week 值得去的活动，和群里谁会去。</p>
     </div>
     <button class="btn primary" id="addBtn" type="button">＋ 添加活动</button>
   </header>
@@ -204,6 +205,7 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
     </div>
     <div class="me" id="me"></div>
   </div>
+  <p class="src" id="stats" hidden></p>
 
   <div class="notice" id="notice" hidden></div>
   <div class="allbar" id="allbar" hidden>
@@ -275,7 +277,7 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
 <div id="toast" role="status" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=20"></script>
-<script src="app.js?v=20"></script>
+<script src="config.js?v=21"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>

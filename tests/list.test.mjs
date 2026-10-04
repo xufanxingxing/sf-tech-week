@@ -126,7 +126,7 @@ describe("laying out the list", () => {
     assert.deepEqual(x.$$(".day").map((d) => titles(x, d)), [["House"], ["Other", "House"], ["House"]]);
     assert.deepEqual([0, 1, 2].map((n) => x.$(".time", x.card("House", n)).textContent),
       ["11:00– 17:00· 第 1/3 天", "12:00– 16:00· 第 2/3 天", "13:00· 第 3/3 天"]);
-    assert.equal(x.$("#stats").textContent, "2 个活动 · 0 人已标记");
+    assert.equal(x.$("#stats").textContent, "2 个活动");
   });
 
   test("extra days that are not a proper date and time are ignored", async (t) => {
@@ -167,16 +167,20 @@ describe("laying out the list", () => {
     assert.equal(x.$(".where").textContent, evil);
   });
 
-  test("the header counts events and distinct people", async (t) => {
+  test("the line under the tabs counts the events in the tab on show, and says nothing about people", async (t) => {
     const a = event(), b = event();
-    const x = await boot(t, { events: [a, b], rsvps: [rsvp(a.id, "Ann"), rsvp(b.id, "Ann", "interested"), rsvp(b.id, "Bo", "pending")] });
-    assert.equal(x.$("#stats").textContent, "2 个活动 · 2 人已标记");
+    const x = await boot(t, { name: "Ann", events: [a, b], rsvps: [rsvp(a.id, "Ann", "going", KEY), rsvp(b.id, "Bo", "pending")] });
+    assert.equal(x.$("#stats").textContent, "2 个活动");
+    assert.equal(x.$(".bar").nextElementSibling, x.$("#stats"));
+    await x.click(x.$("#tabMine"));
+    assert.equal(x.$("#stats").textContent, "1 个活动");
+    assert.doesNotMatch(x.$(".top").textContent, /个活动|已标记/);
   });
 
   test("an empty list invites the first event", async (t) => {
     const x = await boot(t);
     assert.match(listText(x), /还没有活动/);
-    assert.equal(x.$("#stats").textContent, "SF Tech Week 值得去的活动，和群里谁会去。");
+    assert.equal(x.$("#stats").hidden, true);
     assert.equal(x.$("#addBtn").disabled, false);
   });
 
@@ -247,7 +251,7 @@ describe("“全部”: the official calendar", () => {
   test("“推荐” leaves calendar events out and does not fetch them", async (t) => {
     const x = await week(t);
     assert.deepEqual(titles(x), ["Pick"]);
-    assert.equal(x.$("#stats").textContent, "1 个活动 · 0 人已标记");
+    assert.equal(x.$("#stats").textContent, "1 个活动");
     assert.equal(calendarSelects(x).length, 0);
   });
 
@@ -257,7 +261,8 @@ describe("“全部”: the official calendar", () => {
     assert.equal(x.$("#allbar").hidden, false);
     assert.deepEqual(days(x), ["周一 5*", "周五 9"]);
     assert.deepEqual(titles(x), ["Breakfast", "Pick"]);
-    assert.match(x.$("#src").textContent, /这一天 2 个 · 全部 3 个活动，其中 2 个来自 Tech Week 官方日历/);
+    assert.equal(x.$("#stats").textContent, "3 个活动");
+    assert.match(x.$("#src").textContent, /这一天 2 个 · 2 个来自 Tech Week 官方日历/);
     await x.click(x.$("#tabPicks")); await x.click(x.$("#tabAll")); await x.tick(20000);
     assert.equal(calendarSelects(x).length, 1);
   });
@@ -404,7 +409,6 @@ describe("marking a status", () => {
     await x.click(x.button(x.card("Mixer"), "我会去"));
     assert.deepEqual(x.rpcsSent("techweek_set_status"), [{ p_event: x.e.id, p_key: KEY, p_name: "stella", p_status: "going" }]);
     assert.deepEqual(pressed(x, "Mixer"), [true, false, false]);
-    assert.equal(x.$("#stats").textContent, "1 个活动 · 1 人已标记");
   });
 
   test("pressing the lit button again clears my mark", async (t) => {

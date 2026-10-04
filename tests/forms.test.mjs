@@ -351,7 +351,7 @@ describe("deleting an event", () => {
     assert.deepEqual(x.rpcsSent("techweek_delete_event"), [{ p_event: id, p_key: KEY }]);
     assert.equal(x.toast(), "已删除");
     assert.deepEqual(titles(x), ["Theirs"]);
-    assert.equal(x.$("#stats").textContent, "1 个活动 · 0 人已标记");
+    assert.equal(x.$("#stats").textContent, "1 个活动");
   });
 
   test("if the request fails, or the database refuses, it says so and the event stays", async (t) => {

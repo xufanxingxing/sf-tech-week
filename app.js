@@ -89,18 +89,13 @@ function renderList() {
   else me.append(h("button", { class: "link", type: "button", text: "填上你的名字", onclick: () => askName(null) }));
 
   const list = $("#list"); list.replaceChildren();
+  $("#stats").hidden = true; // the count under the tabs, shown once there are events to count
   if (state.status === "loading") { list.append(h("div", { class: "empty", text: "正在加载活动…" })); return; }
   if (state.status === "setup") { list.append(h("div", { class: "empty" }, h("strong", { text: "网站还在设置中" }), "活动列表很快上线，晚点再来看看。")); return; }
   if (state.status === "unavailable") {
     list.append(h("div", { class: "empty" }, h("strong", { text: "现在读不到活动列表" }), "检查一下网络，然后刷新页面。"));
     return;
   }
-
-  const people = new Set();
-  for (const ev of state.events) for (const g of ev.goers) people.add(g.name);
-  $("#stats").textContent = state.events.length
-    ? `${state.events.length} 个活动 · ${people.size} 人已标记`
-    : "SF Tech Week 值得去的活动，和群里谁会去。";
 
   const all = state.filter === "all";
   $("#allbar").hidden = !all;
@@ -112,8 +107,10 @@ function renderList() {
     return;
   }
 
-  let sessions = (all ? everything() : state.filter === "mine" ? everything().filter((ev) => state.mine.has(ev.id)) : state.events)
-    .flatMap((ev) => ev.sessions.map((s, i) => ({ ev, s, i })));
+  const events = all ? everything() : state.filter === "mine" ? everything().filter((ev) => state.mine.has(ev.id)) : state.events;
+  $("#stats").textContent = `${events.length} 个活动`;
+  $("#stats").hidden = !events.length;
+  let sessions = events.flatMap((ev) => ev.sessions.map((s, i) => ({ ev, s, i })));
   let cut = 0;
   if (all) {
     const days = [...new Set(sessions.map((x) => x.s.date))].sort();
@@ -123,7 +120,7 @@ function renderList() {
       "aria-pressed": String(!q && d === state.day), text: `${l.sub} ${d.slice(8).replace(/^0/, "")}`, onclick: () => { state.day = d; state.query = $("#search").value = ""; render(); } }); }));
     sessions = q ? sessions.filter((x) => [x.ev.name, x.ev.hosts, x.ev.addedBy, x.ev.where, x.ev.intro].some((t) => t && t.toLowerCase().includes(q)))
       : sessions.filter((x) => x.s.date === state.day);
-    $("#src").replaceChildren(q ? `找到 ${sessions.length} 个` : `这一天 ${sessions.length} 个`, ` · 全部 ${everything().length} 个活动，其中 ${state.calendar.length} 个来自 `,
+    $("#src").replaceChildren(q ? `找到 ${sessions.length} 个` : `这一天 ${sessions.length} 个`, ` · ${state.calendar.length} 个来自 `,
       h("a", { href: "https://www.tech-week.com/calendar/sf", target: "_blank", rel: "noopener noreferrer", text: "Tech Week 官方日历" }), "（10/3 的快照）");
     if (q && sessions.length > MAX_SHOWN) cut = sessions.length;
   }
