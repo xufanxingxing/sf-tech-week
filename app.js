@@ -22,7 +22,14 @@ function newKey() {
 
 const state = {
   status: "loading",   // loading | ready | setup | unavailable
-  events: [],
+  events: [],          // the recommended events: everything not imported from the official calendar
+  calendar: null,      // the official calendar's events, loaded the first time "全部" is opened
+  calendarStatus: "idle", // idle | loading | ready | failed
+  marked: [],          // calendar events this browser marked, so "我标记的" has them before "全部" is opened
+  goers: new Map(),    // event id -> marks, from the last load
+  notes: new Map(),    // event id -> comments, from the last load
+  day: null,           // the day shown in "全部"
+  query: "",           // what is typed in the "全部" search box
   mine: new Map(),     // event id -> this browser's status on it
   added: new Set(),    // ids of events this browser added, which it may delete
   confirming: null,    // event id awaiting delete confirmation
@@ -30,7 +37,7 @@ const state = {
   drawer: null,        // id of the event whose comments panel is open
   people: null,        // id of the event whose full who's-going panel is open
   drafts: new Map(),   // event id -> unsent comment text
-  filter: "all",
+  filter: "picks",     // picks | all | mine
   name: store.get("tw.name") || "",
   key: store.get("tw.key"),
   busy: new Set(),
@@ -44,6 +51,8 @@ const STATUSES = [
   { key: "pending", label: "等待通过", tag: "等待通过" },
   { key: "interested", label: "感兴趣", tag: "感兴趣" },
 ];
+const ADMIN = "00000000-0000-0000-0000-000000000000"; // in the list of events this browser may delete, it means: all of them
+const MAX_SHOWN = 300; // cards drawn for one search
 const MAX_CHIPS = 5; // names shown on a card before the rest move into the panel
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/, TIME_RE = /^\d{2}:\d{2}$/;
 const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
@@ -70,6 +79,7 @@ function render() {
 }
 
 function renderList() {
+  $("#tabPicks").setAttribute("aria-pressed", state.filter === "picks");
   $("#tabAll").setAttribute("aria-pressed", state.filter === "all");
   $("#tabMine").setAttribute("aria-pressed", state.filter === "mine");
   $("#addBtn").disabled = state.status !== "ready";
@@ -92,13 +102,36 @@ function renderList() {
     ? `${state.events.length} 个活动 · ${people.size} 人已标记`
     : "SF Tech Week 值得去的活动，和群里谁会去。";
 
-  const shown = state.events
-    .filter((ev) => state.filter === "all" || state.mine.has(ev.id))
-    .flatMap((ev) => ev.sessions.map((s, i) => ({ ev, s, i })))
-    .sort((x, y) => (x.s.date + x.s.start + x.ev.name).localeCompare(y.s.date + y.s.start + y.ev.name));
+  const all = state.filter === "all";
+  $("#allbar").hidden = !all;
+  if (all && state.calendarStatus !== "ready") {
+    list.append(state.calendarStatus === "failed"
+      ? h("div", { class: "empty" }, h("strong", { text: "官方日历没加载出来" }), h("button", { class: "link", type: "button", text: "再试一次", onclick: loadCalendar }))
+      : h("div", { class: "empty", text: "正在加载官方日历的全部活动…" }));
+    $("#days").replaceChildren(); $("#src").textContent = "";
+    return;
+  }
+
+  let sessions = (all ? everything() : state.filter === "mine" ? everything().filter((ev) => state.mine.has(ev.id)) : state.events)
+    .flatMap((ev) => ev.sessions.map((s, i) => ({ ev, s, i })));
+  let cut = 0;
+  if (all) {
+    const days = [...new Set(sessions.map((x) => x.s.date))].sort();
+    if (!days.includes(state.day)) state.day = days.includes(today()) ? today() : days[0] || null;
+    const q = state.query.trim().toLowerCase();
+    $("#days").replaceChildren(...days.map((d) => { const l = dayLabel(d); return h("button", { class: "tab", type: "button",
+      "aria-pressed": String(!q && d === state.day), text: `${l.sub} ${d.slice(8).replace(/^0/, "")}`, onclick: () => { state.day = d; state.query = $("#search").value = ""; render(); } }); }));
+    sessions = q ? sessions.filter((x) => [x.ev.name, x.ev.hosts, x.ev.addedBy, x.ev.where].some((t) => t && t.toLowerCase().includes(q)))
+      : sessions.filter((x) => x.s.date === state.day);
+    $("#src").replaceChildren(q ? `找到 ${sessions.length} 个` : `这一天 ${sessions.length} 个`, ` · 全部 ${everything().length} 个活动，其中 ${state.calendar.length} 个来自 `,
+      h("a", { href: "https://www.tech-week.com/calendar/sf", target: "_blank", rel: "noopener noreferrer", text: "Tech Week 官方日历" }), "（10/3 的快照）");
+    if (q && sessions.length > MAX_SHOWN) cut = sessions.length;
+  }
+  const shown = sessions.sort((x, y) => (x.s.date + x.s.start + x.ev.name).localeCompare(y.s.date + y.s.start + y.ev.name)).slice(0, cut ? MAX_SHOWN : undefined);
   if (!shown.length) {
     list.append(state.filter === "mine"
-      ? h("div", { class: "empty" }, h("strong", { text: "你还没标记任何活动" }), "在“全部”里点“我会去”“等待通过”或“感兴趣”，这里就是你的日程。")
+      ? h("div", { class: "empty" }, h("strong", { text: "你还没标记任何活动" }), "在“推荐”或“全部”里点“我会去”“等待通过”或“感兴趣”，这里就是你的日程。")
+      : all ? h("div", { class: "empty" }, h("strong", { text: "没有找到活动" }), "换个关键词，或者点上面的日期。")
       : h("div", { class: "empty" }, h("strong", { text: "还没有活动" }), "点右上角“添加活动”，放上第一个值得去的。"));
     return;
   }
@@ -113,7 +146,19 @@ function renderList() {
     }
     section.append(card(ev, s, i));
   }
+  if (cut) list.append(h("p", { class: "src", text: `只显示前 ${MAX_SHOWN} 个，一共找到 ${cut} 个。再多打几个字缩小范围。` }));
   fitGoing();
+}
+
+// Every event this page has: the recommended ones, then calendar ones it has loaded, each once.
+function everything() {
+  const seen = new Set();
+  return [...state.events, ...(state.calendar || []), ...state.marked].filter((ev) => !seen.has(ev.id) && seen.add(ev.id));
+}
+const findEvent = (id) => (id ? everything().find((e) => e.id === id) : undefined);
+function today() {
+  const d = new Date(), p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 // A card's who's-going row stays within two lines: names drop off the end until the "全部" button fits on the second.
@@ -165,16 +210,17 @@ function card(ev, s, i) {
     h("div", { class: "main" },
       h("div", { class: "head" },
         h("h3", {}, url ? h("a", { href: url, target: "_blank", rel: "noopener noreferrer", title: "打开报名页面" }, ev.name, h("span", { class: "ext", "aria-hidden": "true", text: " ↗" })) : ev.name),
-        ev.curated ? h("span", { class: "badge", text: "群主推荐" }) : null),
-      h("div", { class: "by" }, icon(PERSON), h("span", { text: ev.addedBy + " 推荐" })),
+        ev.curated ? h("span", { class: "badge", text: "群主推荐" }) : null,
+        ev.featured ? h("span", { class: "badge official", text: "官方精选" }) : null),
+      h("div", { class: "by" }, icon(PERSON), h("span", { text: ev.calendar ? "主办：" + (ev.hosts || "未注明") : ev.addedBy + " 推荐" })),
       h("div", { class: "where" }, icon(PIN), h("span", { text: ev.where })),
-      h("p", { class: "why" }, h("span", { class: "whylabel", text: "为什么值得去" }), ev.why),
+      ev.why ? h("p", { class: "why" }, h("span", { class: "whylabel", text: "为什么值得去" }), ev.why) : null,
       h("div", { class: "actions" },
         STATUSES.map((st) => h("button", { class: "btn go", type: "button", "aria-pressed": String(mine === st.key),
           disabled: state.busy.has(ev.id), text: st.label, onclick: () => setStatus(ev, st.key) })),
         h("span", { class: "spacer" }),
         commentButton(ev),
-        state.added.has(ev.id) ? h("button", { class: "link del" + (sure ? " sure" : ""), type: "button",
+        state.added.has(ev.id) || state.added.has(ADMIN) ? h("button", { class: "link del" + (sure ? " sure" : ""), type: "button",
           text: sure ? "确定删除？再点一次" : "删除", onclick: () => removeEvent(ev) }) : null,
       ),
       who.length ? h("div", { class: "going" },
@@ -194,7 +240,7 @@ function openPeople(id) {
 }
 
 function renderPeople() {
-  const ev = state.events.find((e) => e.id === state.people);
+  const ev = findEvent(state.people);
   $("#people").hidden = !ev;
   if (!ev) { state.people = null; return; }
   const who = people(ev);
@@ -231,7 +277,7 @@ function openDrawer(id) {
 
 // The panel's input lives outside the list so refreshes never touch what is being typed.
 function renderDrawer() {
-  const ev = state.events.find((e) => e.id === state.drawer);
+  const ev = findEvent(state.drawer);
   $("#drawer").hidden = !ev;
   if (!ev) { state.drawer = null; return; }
   $("#dTitle").textContent = `留言 (${ev.comments.length})`;
@@ -246,12 +292,14 @@ function renderDrawer() {
 async function sendComment() {
   const input = $("#dInput"), id = state.drawer, body = input.value.trim();
   if (!id || !body) { input.focus(); return; }
+  if ($("#dSend").disabled) return; // still sending: a second Enter must not post the same text again
   if (!state.name) { askName(() => sendComment()); return; }
   $("#dSend").disabled = true;
   const { error } = await sb.rpc("techweek_add_comment", { p_event: id, p_key: state.key, p_name: state.name, p_body: body });
   $("#dSend").disabled = false;
   if (error) { toast("留言没发出去，请再试一次。"); return; }
-  input.value = ""; state.drafts.delete(id);
+  if (state.drawer === id) input.value = ""; // by now the box may hold what is being typed for another event
+  state.drafts.delete(id);
   await refresh();
   input.focus();
 }
@@ -279,13 +327,55 @@ async function fetchAll(table, columns) {
   }
 }
 
-let refreshing = false;
-async function refresh() {
-  if (refreshing) return;
-  refreshing = true;
+// One load at a time. A call that arrives during a load asks for one more after it and waits for that one,
+// so a mark or comment saved a moment ago is never missing from what gets drawn.
+let refreshing = null, again = false;
+function refresh() {
+  if (refreshing) { again = true; return refreshing; }
+  return (refreshing = (async () => {
+    do { again = false; await load(); } while (again);
+    refreshing = null;
+    render();
+  })());
+}
+const COLUMNS = "id,name,link,date,start_time,end_time,extra_dates,location,why,added_by,curated,source,hosts,featured";
+const toEvent = (e) => ({
+  id: e.id, name: e.name, link: e.link,
+  sessions: [{ date: e.date, start: e.start_time.slice(0, 5), end: e.end_time ? e.end_time.slice(0, 5) : "" },
+    ...(Array.isArray(e.extra_dates) ? e.extra_dates : []).filter((x) => x && DATE_RE.test(x.date) && TIME_RE.test(x.start))
+      .map((x) => ({ date: x.date, start: x.start, end: TIME_RE.test(x.end) ? x.end : "" }))],
+  where: e.location, why: e.why, addedBy: e.added_by, curated: e.curated,
+  calendar: e.source === "calendar", hosts: e.hosts || "", featured: !!e.featured,
+  goers: state.goers.get(e.id) || [],
+  comments: state.notes.get(e.id) || [],
+});
+function attach(list) {
+  for (const ev of list) { ev.goers = state.goers.get(ev.id) || []; ev.comments = state.notes.get(ev.id) || []; }
+}
+
+// The official calendar is a snapshot that does not change, so it is fetched once, when "全部" is first opened.
+async function loadCalendar() {
+  if (state.calendarStatus === "loading" || state.calendarStatus === "ready") return;
+  state.calendarStatus = "loading"; render();
+  try {
+    const rows = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await sb.from("techweek_events").select(COLUMNS).eq("source", "calendar")
+        .order("date").order("start_time").order("id").range(from, from + 999);
+      if (error) throw error;
+      rows.push(...data);
+      if (data.length < 1000) break;
+    }
+    state.calendar = rows.map(toEvent);
+    state.calendarStatus = "ready";
+  } catch { state.calendarStatus = "failed"; }
+  render();
+}
+
+async function load() {
   try {
     const [ev, rsvps, mine, added, comments, myComments] = await Promise.all([
-      sb.from("techweek_events").select("id,name,link,date,start_time,end_time,extra_dates,location,why,added_by,curated").order("date").order("start_time").order("name"),
+      sb.from("techweek_events").select(COLUMNS).eq("source", "community").order("date").order("start_time").order("name"),
       fetchAll("techweek_rsvps", "id,event_id,name,status"),
       sb.rpc("techweek_my_rsvps", { p_key: state.key }),
       sb.rpc("techweek_my_added", { p_key: state.key }),
@@ -303,24 +393,24 @@ async function refresh() {
       if (!notes.has(c.event_id)) notes.set(c.event_id, []);
       notes.get(c.event_id).push(c);
     }
-    state.events = ev.data.map((e) => ({
-      id: e.id, name: e.name, link: e.link,
-      sessions: [{ date: e.date, start: e.start_time.slice(0, 5), end: e.end_time ? e.end_time.slice(0, 5) : "" },
-        ...(Array.isArray(e.extra_dates) ? e.extra_dates : []).filter((x) => x && DATE_RE.test(x.date) && TIME_RE.test(x.start))
-          .map((x) => ({ date: x.date, start: x.start, end: TIME_RE.test(x.end) ? x.end : "" }))],
-      where: e.location, why: e.why, addedBy: e.added_by, curated: e.curated,
-      goers: byEvent.get(e.id) || [],
-      comments: notes.get(e.id) || [],
-    }));
+    state.goers = byEvent; state.notes = notes;
+    state.events = ev.data.map(toEvent);
+    if (state.calendar) attach(state.calendar);
     if (!mine.error) state.mine = new Map(mine.data.map((r) => [r.event_id, r.status]));
+    // Marks on calendar events that are not loaded yet: fetch just those events, so "我标记的" is complete.
+    const have = new Set(everything().map((e) => e.id)), missing = [...state.mine.keys()].filter((id) => !have.has(id));
+    if (missing.length) {
+      const extra = await sb.from("techweek_events").select(COLUMNS).in("id", missing);
+      if (!extra.error) state.marked = [...state.marked, ...extra.data.map(toEvent)];
+    }
+    state.marked = state.marked.filter((e) => state.mine.has(e.id));
+    attach(state.marked);
     if (!added.error) state.added = new Set(added.data);
     if (!myComments.error) state.myComments = new Set(myComments.data);
     state.status = "ready";
   } catch {
     if (state.status !== "ready") state.status = "unavailable";
   }
-  refreshing = false;
-  render();
 }
 
 function askName(then) {
@@ -358,10 +448,13 @@ async function removeEvent(ev) {
   state.confirming = null;
   const { data, error } = await sb.rpc("techweek_delete_event", { p_event: ev.id, p_key: state.key });
   toast(error || !data ? "没删掉，请再试一次。" : "已删除");
+  if (!error && data && state.calendar) state.calendar = state.calendar.filter((e) => e.id !== ev.id);
   await refresh();
 }
 
-$("#tabAll").onclick = () => { state.filter = "all"; render(); };
+$("#tabPicks").onclick = () => { state.filter = "picks"; render(); };
+$("#tabAll").onclick = () => { state.filter = "all"; render(); if (sb) loadCalendar(); };
+$("#search").addEventListener("input", () => { state.query = $("#search").value; renderList(); });
 $("#tabMine").onclick = () => { state.filter = "mine"; render(); };
 $("#addBtn").onclick = () => {
   $("#eventErr").hidden = true;

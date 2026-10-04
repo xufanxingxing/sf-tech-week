@@ -13,13 +13,15 @@ const PAGE = HTML.replace(/<script\b[^>]*\bsrc=[^>]*><\/script>/g, "");
 const APP = new vm.Script(SOURCE, { filename: "app.js" });
 
 export const KEY = "key-of-this-browser";
+export const plain = (v) => JSON.parse(JSON.stringify(v)); // a copy of a page object that assert can compare
 export const flush = async () => { for (let i = 0; i < 3; i++) await new Promise((r) => setImmediate(r)); };
 
 let seq = 0;
 export function event(over = {}) {
   const n = ++seq;
   return { id: `ev-${n}`, name: `Event ${n}`, link: `https://example.com/e/${n}`, date: "2026-10-05", start_time: "18:00:00", end_time: "20:00:00",
-    extra_dates: [], location: "San Francisco", why: "值得去", added_by: "群主", curated: false, added_key: null, ...over };
+    extra_dates: [], location: "San Francisco", why: "值得去", added_by: "群主", curated: false, added_key: null,
+    source: "community", hosts: null, featured: false, ...over };
 }
 export const rsvp = (event_id, name, status = "going", person_key = `key-of-${name}-0000000000`) => ({ event_id, name, status, person_key });
 export const comment = (event_id, name, body, over = {}) =>
@@ -30,6 +32,7 @@ export function crowd(event_id, counts, prefix = "p") {
   return Object.entries(counts).flatMap(([status, count]) => Array.from({ length: count }, () => rsvp(event_id, prefix + ++n, status)));
 }
 
+export const ADMIN = "00000000-0000-0000-0000-000000000000";
 const len = (s, min, max) => typeof s === "string" && [...s].length >= min && [...s].length <= max;
 
 function backend(seed) {
@@ -38,6 +41,8 @@ function backend(seed) {
     techweek_events: (seed.events || []).map((e) => ({ ...e })),
     techweek_rsvps: (seed.rsvps || []).map((r) => ({ id: ++id, ...r })),
     techweek_comments: (seed.comments || []).map((c) => ({ id: ++id, ...c })),
+    techweek_admins: (seed.admins || []).map((person_key) => ({ person_key })), // browsers that may delete anything
+    techweek_admin_requests: [],
   };
   const calls = [];          // every request the app sent, in order
   const failing = new Set(); // table or function names that answer with an error
@@ -45,7 +50,7 @@ function backend(seed) {
 
   // The server works out its answer when the request arrives; only the delivery can be delayed.
   function reply(name, call, compute) {
-    calls.push(call);
+    calls.push(JSON.parse(JSON.stringify(call))); // a plain copy: the app's objects belong to the page's own realm
     let result;
     if (failing.has(name)) result = { data: null, error: { message: "request failed" } };
     else {
@@ -56,11 +61,20 @@ function backend(seed) {
   }
   const check = (ok, what) => { if (!ok) throw new Error("violates " + what); };
   const mineOf = (rows, key) => rows.filter((r) => r.person_key === key);
+  const admin = (key) => db.techweek_admins.some((a) => a.person_key === key);
 
   const rpcs = {
     techweek_my_rsvps: ({ p_key }) => mineOf(db.techweek_rsvps, p_key).map((r) => ({ event_id: r.event_id, status: r.status })),
-    techweek_my_added: ({ p_key }) => db.techweek_events.filter((e) => e.added_key === p_key).map((e) => e.id),
-    techweek_my_comments: ({ p_key }) => mineOf(db.techweek_comments, p_key).map((c) => c.id),
+    // an admin gets the all-zero id, which stands for "every event", ahead of the ones this browser added
+    techweek_my_added: ({ p_key }) => [...(admin(p_key) ? [ADMIN] : []), ...db.techweek_events.filter((e) => e.added_key === p_key).map((e) => e.id)],
+    techweek_my_comments: ({ p_key }) => db.techweek_comments.filter((c) => c.person_key === p_key || admin(p_key)).map((c) => c.id),
+    techweek_is_admin: ({ p_key }) => admin(p_key),
+    techweek_request_admin({ p_key, p_code, p_name }) {
+      check(len(p_key, 16, 64), "admin_requests.person_key");
+      check(/^[0-9]{6}$/.test(p_code), "admin_requests.code");
+      check(len(p_name.trim(), 0, 30), "admin_requests.name");
+      db.techweek_admin_requests.push({ id: ++id, person_key: p_key, code: p_code, name: p_name.trim() || null });
+    },
     techweek_set_status({ p_event, p_key, p_name, p_status }) {
       const rows = db.techweek_rsvps, at = rows.findIndex((r) => r.event_id === p_event && r.person_key === p_key);
       if (p_status == null) { if (at >= 0) rows.splice(at, 1); return; }
@@ -83,12 +97,12 @@ function backend(seed) {
       db.techweek_comments.push({ id: ++id, event_id: p_event, person_key: p_key, name: p_name.trim(), body: p_body.trim(), created_at: new Date().toISOString() });
     },
     techweek_delete_comment({ p_id, p_key }) {
-      const at = db.techweek_comments.findIndex((c) => c.id === p_id && c.person_key === p_key);
+      const at = db.techweek_comments.findIndex((c) => c.id === p_id && (c.person_key === p_key || admin(p_key)));
       if (at >= 0) db.techweek_comments.splice(at, 1);
       return at >= 0;
     },
     techweek_delete_event({ p_event, p_key }) {
-      const at = db.techweek_events.findIndex((e) => e.id === p_event && e.added_key === p_key);
+      const at = db.techweek_events.findIndex((e) => e.id === p_event && (e.added_key === p_key || admin(p_key)));
       if (at < 0) return false;
       db.techweek_events.splice(at, 1);
       for (const t of ["techweek_rsvps", "techweek_comments"]) db[t] = db[t].filter((r) => r.event_id !== p_event);
@@ -105,9 +119,9 @@ function backend(seed) {
     check(len(row.location, 1, 200), "events.location");
     check(len(row.why, 1, 600), "events.why");
     check(len(row.added_by, 1, 30), "events.added_by");
-    check(!row.curated, "the insert policy (curated = false)");
+    check(!row.curated && (row.source ?? "community") === "community" && row.tw_id == null && !row.featured, "the insert policy (an ordinary recommendation)");
     check(row.added_key == null || len(row.added_key, 16, 64), "events.added_key");
-    db.techweek_events.push({ curated: false, ...row, id: `ev-new-${++id}`, start_time: row.start_time.slice(0, 5) + ":00",
+    db.techweek_events.push({ curated: false, source: "community", hosts: null, featured: false, ...row, id: `ev-new-${++id}`, start_time: row.start_time.slice(0, 5) + ":00",
       end_time: row.end_time && row.end_time.slice(0, 5) + ":00" });
   }
   const SECRET = new Set(["person_key", "added_key"]); // columns anon may not read
@@ -115,13 +129,17 @@ function backend(seed) {
     from: (table) => ({
       select(columns) {
         let range = null;
+        const where = {}, tests = []; // eq and in filters, as sent and as functions
         const q = {
           order: () => q,
+          eq(col, value) { where[col] = value; tests.push((r) => r[col] === value); return q; },
+          in(col, values) { where[col] = [...values]; tests.push((r) => values.includes(r[col])); return q; },
           range(a, b) { range = [a, b]; return q; },
-          then: (res, rej) => reply(table, { op: "select", table, columns, range }, () => {
+          then: (res, rej) => reply(table, { op: "select", table, columns, range, where }, () => {
             const cols = columns.split(",");
-            check(!cols.some((c) => SECRET.has(c)), "column privileges");
-            const rows = range ? db[table].slice(range[0], range[1] + 1) : db[table];
+            check(!table.startsWith("techweek_admin") && !cols.some((c) => SECRET.has(c)), "read privileges");
+            const found = db[table].filter((r) => tests.every((ok) => ok(r)));
+            const rows = range ? found.slice(range[0], range[1] + 1) : found.slice(0, 1000); // the server never sends more than 1000 rows at once
             return rows.map((r) => Object.fromEntries(cols.map((c) => [c, r[c]])));
           }).then(res, rej),
         };
@@ -141,13 +159,15 @@ function backend(seed) {
   };
 }
 
-// boot(t, { name, events, rsvps, comments, ... }) loads the page and waits for the first refresh. The window closes when test t ends.
+// boot(t, { name, events, rsvps, comments, admins, ... }) loads the page and waits for the first refresh. The window closes when test t ends.
 export async function boot(t, { name = "", key = KEY, config = { supabaseUrl: "https://db.test", supabaseKey: "anon-key" },
-  client = true, width = Infinity, panel = 0, innerWidth = 1024, ...seed } = {}) {
-  const dom = new JSDOM(PAGE, { runScripts: "outside-only", url: "https://techweek.test/", pretendToBeVisual: true });
+  client = true, width = Infinity, panel = 0, innerWidth = 1024, hash = "", setup = null, failing = [], holding = [], ...seed } = {}) {
+  const dom = new JSDOM(PAGE, { runScripts: "outside-only", url: "https://techweek.test/" + hash, pretendToBeVisual: true });
   const { window } = dom, { document } = window, ctx = dom.getInternalVMContext();
   t.after(() => window.close());
   const api = backend(seed);
+  api.fail(...failing);
+  const release = Object.fromEntries(holding.map((n) => [n, api.hold(n)])); // answers held back from the very first request
 
   // The app's timers run only when the test says so.
   const timers = []; let now = 0, tid = 0;
@@ -196,7 +216,8 @@ export async function boot(t, { name = "", key = KEY, config = { supabaseUrl: "h
   if (name) window.localStorage.setItem("tw.name", name);
   if (key) window.localStorage.setItem("tw.key", key);
   if (config) window.TECHWEEK_CONFIG = config;
-  if (client) window.supabase = { createClient: (url, anon, options) => { api.calls.push({ op: "connect", url, anon, options }); return api.client; } };
+  if (client) window.supabase = { createClient: (url, anon, options) => { api.calls.push(JSON.parse(JSON.stringify({ op: "connect", url, anon, options }))); return api.client; } };
+  if (setup) setup(window);
 
   APP.runInContext(ctx);
   await flush();
@@ -208,7 +229,7 @@ export async function boot(t, { name = "", key = KEY, config = { supabaseUrl: "h
     return e;
   };
   return {
-    ...api, window, document, $, $$, flush, tick, layout, press,
+    ...api, window, document, $, $$, flush, tick, layout, press, release,
     state: vm.runInContext("state", ctx),
     app: (code) => vm.runInContext(code, ctx),
     // the card of an event, by event name; with several sessions, the nth card

@@ -75,6 +75,14 @@ button { cursor: pointer; }
 .me { color: var(--muted); font-size: 13px; }
 .link { border: 0; background: none; padding: 0; color: var(--fg); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
 
+.allbar { display: flex; flex-direction: column; gap: 10px; }
+.days { display: flex; flex-wrap: wrap; gap: 4px; }
+.days .tab { border: 1px solid var(--line); background: var(--surface); font-variant-numeric: tabular-nums; }
+.days .tab[aria-pressed="true"] { background: var(--fg); border-color: var(--fg); color: var(--bg); box-shadow: none; }
+.search { width: 100%; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 12px; font-size: 15px; }
+.src { margin: 0; font-size: 13px; color: var(--muted); }
+.src a { color: inherit; text-underline-offset: 3px; }
+.badge.official { color: var(--muted); background: var(--accent-soft); }
 .notice { background: var(--accent-soft); color: var(--fg); border-radius: 10px; padding: 10px 14px; font-size: 14px; }
 
 /* Agenda */
@@ -189,13 +197,19 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
 
   <div class="bar">
     <div class="tabs" role="group" aria-label="筛选">
-      <button class="tab" id="tabAll" type="button" aria-pressed="true">全部</button>
+      <button class="tab" id="tabPicks" type="button" aria-pressed="true">推荐</button>
+      <button class="tab" id="tabAll" type="button" aria-pressed="false">全部</button>
       <button class="tab" id="tabMine" type="button" aria-pressed="false">我标记的</button>
     </div>
     <div class="me" id="me"></div>
   </div>
 
   <div class="notice" id="notice" hidden></div>
+  <div class="allbar" id="allbar" hidden>
+    <div class="days" id="days" role="group" aria-label="日期"></div>
+    <input class="search" id="search" type="search" maxlength="60" placeholder="搜索活动名、主办方或地点" aria-label="搜索全部活动">
+    <p class="src" id="src"></p>
+  </div>
   <main id="list"></main>
 </div>
 
@@ -260,7 +274,7 @@ dialog p { margin: 0; color: var(--muted); font-size: 14px; }
 <div id="toast" role="status" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=17"></script>
-<script src="app.js?v=17"></script>
+<script src="config.js?v=19"></script>
+<script src="app.js?v=19"></script>
 </body>
 </html>
