@@ -121,7 +121,7 @@ function renderList() {
     const q = state.query.trim().toLowerCase();
     $("#days").replaceChildren(...days.map((d) => { const l = dayLabel(d); return h("button", { class: "tab", type: "button",
       "aria-pressed": String(!q && d === state.day), text: `${l.sub} ${d.slice(8).replace(/^0/, "")}`, onclick: () => { state.day = d; state.query = $("#search").value = ""; render(); } }); }));
-    sessions = q ? sessions.filter((x) => [x.ev.name, x.ev.hosts, x.ev.addedBy, x.ev.where].some((t) => t && t.toLowerCase().includes(q)))
+    sessions = q ? sessions.filter((x) => [x.ev.name, x.ev.hosts, x.ev.addedBy, x.ev.where, x.ev.intro].some((t) => t && t.toLowerCase().includes(q)))
       : sessions.filter((x) => x.s.date === state.day);
     $("#src").replaceChildren(q ? `找到 ${sessions.length} 个` : `这一天 ${sessions.length} 个`, ` · 全部 ${everything().length} 个活动，其中 ${state.calendar.length} 个来自 `,
       h("a", { href: "https://www.tech-week.com/calendar/sf", target: "_blank", rel: "noopener noreferrer", text: "Tech Week 官方日历" }), "（10/3 的快照）");
@@ -204,8 +204,9 @@ function card(ev, s, i) {
   const mine = state.mine.get(ev.id), url = safeUrl(ev.link);
   const sure = state.confirming === ev.id;
   const who = people(ev), listed = state.people === ev.id;
+  const allDay = s.start === "00:00" && (!s.end || s.end >= "23:45"); // how the calendar writes an event that runs all day
   return h("article", { class: "event" },
-    h("div", { class: "time" }, h("b", { text: s.start }), s.end ? h("span", { text: "– " + s.end }) : null,
+    h("div", { class: "time" }, allDay ? h("b", { text: "全天" }) : [h("b", { text: s.start }), s.end ? h("span", { text: "– " + s.end }) : null],
       ev.sessions.length > 1 ? h("i", { text: `· 第 ${i + 1}/${ev.sessions.length} 天` }) : null),
     h("div", { class: "main" },
       h("div", { class: "head" },
@@ -214,6 +215,7 @@ function card(ev, s, i) {
         ev.featured ? h("span", { class: "badge official", text: "官方精选" }) : null),
       h("div", { class: "by" }, icon(PERSON), h("span", { text: ev.calendar ? "主办：" + (ev.hosts || "未注明") : ev.addedBy + " 推荐" })),
       h("div", { class: "where" }, icon(PIN), h("span", { text: ev.where })),
+      ev.intro ? h("p", { class: "intro", text: ev.intro }) : null,
       ev.why ? h("p", { class: "why" }, h("span", { class: "whylabel", text: "为什么值得去" }), ev.why) : null,
       h("div", { class: "actions" },
         STATUSES.map((st) => h("button", { class: "btn go", type: "button", "aria-pressed": String(mine === st.key),
@@ -338,14 +340,14 @@ function refresh() {
     render();
   })());
 }
-const COLUMNS = "id,name,link,date,start_time,end_time,extra_dates,location,why,added_by,curated,source,hosts,featured";
+const COLUMNS = "id,name,link,date,start_time,end_time,extra_dates,location,why,added_by,curated,source,hosts,featured,intro";
 const toEvent = (e) => ({
   id: e.id, name: e.name, link: e.link,
   sessions: [{ date: e.date, start: e.start_time.slice(0, 5), end: e.end_time ? e.end_time.slice(0, 5) : "" },
     ...(Array.isArray(e.extra_dates) ? e.extra_dates : []).filter((x) => x && DATE_RE.test(x.date) && TIME_RE.test(x.start))
       .map((x) => ({ date: x.date, start: x.start, end: TIME_RE.test(x.end) ? x.end : "" }))],
   where: e.location, why: e.why, addedBy: e.added_by, curated: e.curated,
-  calendar: e.source === "calendar", hosts: e.hosts || "", featured: !!e.featured,
+  calendar: e.source === "calendar", hosts: e.hosts || "", featured: !!e.featured, intro: e.intro || "",
   goers: state.goers.get(e.id) || [],
   comments: state.notes.get(e.id) || [],
 });

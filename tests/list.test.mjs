@@ -238,7 +238,7 @@ describe("“全部”: the official calendar", () => {
   function week(t, more = {}) {
     return boot(t, { name: "stella", ...more, events: [
       event({ name: "Pick", date: "2026-10-05", start_time: "18:00:00" }),
-      official({ name: "Breakfast", date: "2026-10-05", start_time: "08:00:00", hosts: "Stripe, Vercel", location: "SOMA" }),
+      official({ name: "Breakfast", date: "2026-10-05", start_time: "08:00:00", hosts: "Stripe, Vercel", location: "SOMA", intro: "早午餐 + 社交，主题：AI、金融科技" }),
       official({ name: "Faire", date: "2026-10-09", start_time: "10:30:00", featured: true, location: "Jackson Square" }),
       ...(more.events || []),
     ] });
@@ -276,6 +276,7 @@ describe("“全部”: the official calendar", () => {
     const card = x.card("Breakfast");
     assert.equal(x.$(".by", card).textContent, "主办：Stripe, Vercel");
     assert.equal(x.$(".where", card).textContent, "SOMA");
+    assert.equal(x.$(".intro", card).textContent, "早午餐 + 社交，主题：AI、金融科技");
     assert.equal(x.$(".why", card), null);
     assert.equal(x.$(".badge", card), null);
     await x.click(x.$$("#days button")[1]);
@@ -290,11 +291,24 @@ describe("“全部”: the official calendar", () => {
     assert.deepEqual(days(x), ["周一 5", "周五 9"]);
     await search(x, "STRIPE");
     assert.deepEqual(titles(x), ["Breakfast"]);
+    await search(x, "金融科技");
+    assert.deepEqual(titles(x), ["Breakfast"]);
     await search(x, "nothing like this");
     assert.match(listText(x), /没有找到活动/);
     await x.click(x.$$("#days button")[0]);
     assert.equal(x.$("#search").value, "");
     assert.deepEqual(titles(x), ["Breakfast", "Pick"]);
+  });
+
+  test("an event the calendar lists from midnight to 23:45 is shown as running all day", async (t) => {
+    const x = await week(t, { events: [
+      official({ name: "Popup", date: "2026-10-05", start_time: "00:00:00", end_time: "23:45:00" }),
+      official({ name: "Late", date: "2026-10-05", start_time: "00:00:00", end_time: "21:00:00" }),
+    ] });
+    await x.click(x.$("#tabAll"));
+    assert.equal(x.$(".time", x.card("Popup")).textContent, "全天");
+    assert.equal(x.$(".time", x.card("Late")).textContent, "00:00– 21:00");
+    assert.equal(x.$(".intro", x.card("Popup")), null);
   });
 
   test("a search with too many results shows the first 300 and says how many there were", async (t) => {
