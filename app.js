@@ -193,11 +193,18 @@ function showLanguage() {
   $("#langTo").textContent = lang === "en" ? "CN" : "EN"; // the button names the language it switches to
   $("#langBtn").setAttribute("aria-label", lang === "en" ? "切换到中文" : "Switch to English");
 }
+// The address carries the language and the tab, so a shared link opens the same view. Chinese and the first tab are the
+// defaults and are left out.
+function syncAddress() {
+  const url = new URL(location.href);
+  const put = (key, value) => (value ? url.searchParams.set(key, value) : url.searchParams.delete(key));
+  put("lang", lang === "en" ? "en" : "");
+  put("tab", state.filter === "picks" ? "" : state.filter);
+  history.replaceState(null, "", url);
+}
 function switchLanguage() {
   lang = lang === "en" ? "zh" : "en";
-  const url = new URL(location.href);
-  if (lang === "en") url.searchParams.set("lang", "en"); else url.searchParams.delete("lang"); // the address carries the choice, so a shared link opens the same way
-  history.replaceState(null, "", url);
+  syncAddress();
   showLanguage(); render();
   track("lang", null, { to: lang });
 }
@@ -220,7 +227,7 @@ const state = {
   drawer: null,        // id of the event whose comments panel is open
   people: null,        // id of the event whose full who's-going panel is open
   drafts: new Map(),   // event id -> unsent comment text
-  filter: "picks",     // picks | all | mine
+  filter: ["all", "mine"].includes(new URLSearchParams(location.search).get("tab")) ? new URLSearchParams(location.search).get("tab") : "picks", // picks | all | mine
   name: store.get("tw.name") || "",
   key: store.get("tw.key"),
   busy: new Set(),
@@ -707,8 +714,8 @@ async function removeEvent(ev) {
   await refresh();
 }
 
-$("#tabPicks").onclick = () => { state.filter = "picks"; render(); track("tab"); };
-$("#tabAll").onclick = () => { state.filter = "all"; render(); if (sb) loadCalendar(); track("tab"); };
+$("#tabPicks").onclick = () => { state.filter = "picks"; syncAddress(); render(); track("tab"); };
+$("#tabAll").onclick = () => { state.filter = "all"; syncAddress(); render(); if (sb) loadCalendar(); track("tab"); };
 $("#search").addEventListener("input", () => { state.query = $("#search").value; renderList(); });
 // What people look for, recorded once they pause typing.
 let searchTimer;
@@ -716,7 +723,7 @@ $("#search").addEventListener("input", () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => { const q = state.query.trim(); if (q) track("search", null, { q: q.slice(0, 40) }); }, 1500);
 });
-$("#tabMine").onclick = () => { state.filter = "mine"; render(); track("tab"); };
+$("#tabMine").onclick = () => { state.filter = "mine"; syncAddress(); render(); track("tab"); };
 $("#addBtn").onclick = () => {
   track("add_open");
   $("#eventErr").hidden = true;
@@ -848,6 +855,7 @@ function boot() {
   if (!window.supabase) { state.status = "unavailable"; render(); return; }
   sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, { auth: { persistSession: false } });
   refresh();
+  if (state.filter === "all") loadCalendar(); // a link straight to "全部"
   adminPairing();
   visit(firstTime);
   let away = 0; // when the tab was last put in the background

@@ -230,6 +230,59 @@ describe("the tabs", () => {
   });
 });
 
+describe("the tab in the address", () => {
+  const address = (x) => x.window.location.search + x.window.location.hash;
+  const tabs = (x) => ["#tabPicks", "#tabAll", "#tabMine"].map((id) => x.$(id).getAttribute("aria-pressed") === "true");
+  const cal = (over) => event({ source: "calendar", why: null, hosts: "a16z", ...over });
+  function three(t, more = {}) {
+    const mine = event({ name: "Mine" });
+    return boot(t, { name: "stella", events: [mine, event({ name: "Other" }), cal({ name: "Official" })], rsvps: [rsvp(mine.id, "stella", "going", KEY)], ...more });
+  }
+
+  test("choosing a tab writes it into the address; the first tab is the default and leaves nothing", async (t) => {
+    const x = await three(t);
+    assert.equal(address(x), "");
+    await x.click(x.$("#tabAll"));
+    assert.equal(address(x), "?tab=all");
+    await x.click(x.$("#tabMine"));
+    assert.equal(address(x), "?tab=mine");
+    await x.click(x.$("#tabPicks"));
+    assert.equal(address(x), "");
+  });
+
+  test("a link with ?tab=all opens on “全部” with the calendar loaded", async (t) => {
+    const x = await three(t, { hash: "?tab=all" });
+    assert.deepEqual(tabs(x), [false, true, false]);
+    assert.deepEqual(titles(x), ["Mine", "Official", "Other"]);
+    assert.equal(x.$("#allbar").hidden, false);
+    assert.equal(address(x), "?tab=all");
+  });
+
+  test("a link with ?tab=mine opens on “我标记的”", async (t) => {
+    const x = await three(t, { hash: "?tab=mine" });
+    assert.deepEqual(tabs(x), [false, false, true]);
+    assert.deepEqual(titles(x), ["Mine"]);
+  });
+
+  test("any other tab in the address means the first one", async (t) => {
+    const x = await three(t, { hash: "?tab=everything" });
+    assert.deepEqual(tabs(x), [true, false, false]);
+    assert.deepEqual(titles(x), ["Mine", "Other"]);
+  });
+
+  test("the tab and the language share the address, along with whatever else was in it", async (t) => {
+    const x = await three(t, { hash: "?from=wechat#top" });
+    await x.click(x.$("#tabAll"));
+    await x.click(x.$("#langBtn"));
+    assert.equal(address(x), "?from=wechat&tab=all&lang=en#top");
+    await x.click(x.$("#tabPicks"));
+    assert.equal(address(x), "?from=wechat&lang=en#top");
+    const y = await three(t, { hash: "?lang=en&tab=mine" });
+    assert.deepEqual(tabs(y), [false, false, true]);
+    assert.equal(y.$("#tabMine").textContent, "My marks");
+  });
+});
+
 describe("“全部”: the official calendar", () => {
   const official = (over) => event({ source: "calendar", why: null, added_by: "Tech Week 官方日历", hosts: "a16z", ...over });
   const calendarSelects = (x) => selects(x, "techweek_events").filter((c) => c.where.source === "calendar");
