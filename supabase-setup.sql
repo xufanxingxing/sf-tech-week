@@ -363,3 +363,11 @@ drop policy "anyone adds events" on public.techweek_events;
 create policy "anyone adds events" on public.techweek_events for insert to anon
   with check (curated = false and source = 'community' and tw_id is null and featured = false and intro is null and why is not null);
 -- 简介的数据在 migration-012-intro.sql 里，导入官方日历之后运行。
+
+alter table public.techweek_events add column topics jsonb check (topics is null or jsonb_typeof(topics) = 'array');
+grant select (topics) on public.techweek_events to anon;
+
+drop policy "anyone adds events" on public.techweek_events;
+create policy "anyone adds events" on public.techweek_events for insert to anon
+  with check (curated = false and source = 'community' and tw_id is null and featured = false and intro is null and topics is null and why is not null);
+-- 主题的数据在 migration-013-topics.sql 里，导入官方日历之后运行。
