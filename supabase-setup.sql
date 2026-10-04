@@ -256,3 +256,11 @@ returns setof uuid language sql stable security definer set search_path = public
   union all
   select id from techweek_events where added_key = p_key
 $$;
+
+alter table public.techweek_events add column intro text check (intro is null or char_length(intro) <= 300);
+grant select (intro) on public.techweek_events to anon;
+
+drop policy "anyone adds events" on public.techweek_events;
+create policy "anyone adds events" on public.techweek_events for insert to anon
+  with check (curated = false and source = 'community' and tw_id is null and featured = false and intro is null and why is not null);
+-- 简介的数据在 migration-012-intro.sql 里，导入官方日历之后运行。
