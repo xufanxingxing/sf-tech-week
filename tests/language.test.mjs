@@ -41,7 +41,7 @@ describe("language", () => {
     assert.equal(x.document.title, "Stoody AI: SF Tech Week");
     assert.equal(x.$("h1").textContent, "Stoody AI: SF Tech Week");
     assert.equal(x.$(".top p").textContent, "Official SF Tech Week calendar tech-week.com/calendar/sf ↗");
-    assert.deepEqual(texts(x, ".tabs .tab"), ["Recommendations", "All", "My marks"]);
+    assert.deepEqual(texts(x, ".tabs .tab"), ["Top picks", "All", "My marks"]);
     assert.equal(x.$("#addBtn").textContent, "＋ Add event");
     assert.equal(x.$("#me").textContent, "You are stella · Rename");
     assert.equal(x.$("#stats").textContent, "2 events");
@@ -80,7 +80,7 @@ describe("language", () => {
   test("a link with ?lang=en opens in English", async (t) => {
     const x = await boot(t, { hash: "?lang=en", events: [pick()] });
     assert.equal(x.$("#langTo").textContent, "CN");
-    assert.deepEqual(texts(x, ".tabs .tab"), ["Recommendations", "All", "My marks"]);
+    assert.deepEqual(texts(x, ".tabs .tab"), ["Top picks", "All", "My marks"]);
     assert.equal(x.$(".why", x.card("Supper")).textContent, "Why goA small dinner.");
     assert.equal(address(x), "?lang=en");
   });
