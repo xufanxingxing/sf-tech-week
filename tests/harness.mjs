@@ -27,7 +27,7 @@ export function event(over = {}) {
   const n = ++seq;
   return { id: `ev-${n}`, name: `Event ${n}`, link: `https://example.com/e/${n}`, date: "2026-10-05", start_time: "18:00:00", end_time: "20:00:00",
     extra_dates: [], location: "San Francisco", why: "值得去", added_by: "群主", curated: false, added_key: null,
-    source: "community", hosts: null, featured: false, intro: null, topics: null, ...over };
+    source: "community", hosts: null, featured: false, intro: null, topics: null, why_en: null, ...over };
 }
 export const rsvp = (event_id, name, status = "going", person_key = `key-of-${name}-0000000000`) => ({ event_id, name, status, person_key });
 export const comment = (event_id, name, body, over = {}) =>
@@ -135,9 +135,9 @@ function backend(seed) {
     check(len(row.location, 1, 200), "events.location");
     check(len(row.why, 1, 600), "events.why");
     check(len(row.added_by, 1, 30), "events.added_by");
-    check(!row.curated && (row.source ?? "community") === "community" && row.tw_id == null && !row.featured && row.intro == null && row.topics == null, "the insert policy (an ordinary recommendation)");
+    check(!row.curated && (row.source ?? "community") === "community" && row.tw_id == null && !row.featured && row.intro == null && row.topics == null && row.why_en == null, "the insert policy (an ordinary recommendation)");
     check(row.added_key == null || len(row.added_key, 16, 64), "events.added_key");
-    db.techweek_events.push({ curated: false, source: "community", hosts: null, featured: false, intro: null, topics: null, ...row, id: `ev-new-${++id}`, start_time: row.start_time.slice(0, 5) + ":00",
+    db.techweek_events.push({ curated: false, source: "community", hosts: null, featured: false, intro: null, topics: null, why_en: null, ...row, id: `ev-new-${++id}`, start_time: row.start_time.slice(0, 5) + ":00",
       end_time: row.end_time && row.end_time.slice(0, 5) + ":00" });
   }
   const SECRET = new Set(["person_key", "added_key"]); // columns anon may not read
