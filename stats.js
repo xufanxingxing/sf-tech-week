@@ -13,7 +13,7 @@ function h(tag, attrs, ...kids) {
 }
 
 const state = {
-  status: "loading", // loading | ready | denied | setup | unavailable
+  status: "loading", // loading | ready | closed | setup | unavailable
   missing: false,    // the database has no stats function yet
   loading: false,
   days: 14,
@@ -163,7 +163,7 @@ function render() {
   const note = (title, ...body) => main.replaceChildren(h("div", { class: "empty" }, h("strong", { text: title }), body));
   if (state.status === "loading") { if (!state.data) note("正在加载…"); return; }
   if (state.status === "setup") return note("网站还在设置中", "数据库还没接上，没有数据可看。");
-  if (state.status === "denied") return note("这台浏览器不是管理员", "访问数据只给管理员看。先打开 ", h("a", { href: "./#admin", text: "管理员配对页面" }), "，批准以后再回来。");
+  if (state.status === "closed") return note("数据还没有对所有人开放", "数据库还是只回答管理员的旧设置：在 Supabase 的 SQL Editor 里运行 migration-015-open-stats.sql，然后刷新。");
   if (state.status === "unavailable") return note("现在读不到数据", state.missing ? "数据库里还没有统计功能：先在 Supabase 的 SQL Editor 里运行 migration-011-analytics.sql。" : "检查一下网络，然后刷新页面。");
   const d = state.data;
   $("#meta").textContent = d.since
@@ -175,11 +175,11 @@ function render() {
 async function load() {
   const mine = ++asked;
   state.loading = true; render();
-  const { data, error } = await sb.rpc("techweek_stats", { p_key: key, p_days: state.days });
+  const { data, error } = await sb.rpc("techweek_stats", { p_key: key || "", p_days: state.days }); // the key no longer matters: anyone may look
   if (mine !== asked) return; // a newer range was chosen meanwhile
   state.loading = false;
   if (error) { state.status = "unavailable"; state.missing = error.code === "PGRST202"; }
-  else if (!data) state.status = "denied";
+  else if (!data) state.status = "closed"; // a database from before the numbers were opened answers nothing
   else { state.status = "ready"; state.data = data; }
   render();
 }
@@ -189,7 +189,6 @@ function boot() {
   try { key = localStorage.getItem("tw.key"); } catch {}
   if (!cfg.supabaseUrl || !cfg.supabaseKey) { state.status = "setup"; render(); return; }
   if (!window.supabase) { state.status = "unavailable"; render(); return; }
-  if (!key) { state.status = "denied"; render(); return; } // a browser that has never opened the site cannot be an admin
   sb = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, { auth: { persistSession: false } });
   load();
 }

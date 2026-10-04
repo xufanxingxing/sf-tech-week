@@ -83,8 +83,8 @@ function backend(seed) {
       check(typeof props === "object" && !Array.isArray(props) && JSON.stringify(props).length <= 400, "activity.props");
       db.techweek_activity.push({ id: ++id, person_key: p_key, action: p_action, event_id: p_event, props: JSON.parse(JSON.stringify(props)) });
     },
-    // only an admin gets the summary; the test supplies it as `stats`, either the answer or a function of the days asked for
-    techweek_stats: ({ p_key, p_days }) => (admin(p_key) ? (typeof seed.stats === "function" ? seed.stats(p_days) : seed.stats) : null),
+    // anyone gets the summary; the test supplies it as `stats`, either the answer or a function of the days asked for
+    techweek_stats: ({ p_days }) => (typeof seed.stats === "function" ? seed.stats(p_days) : seed.stats),
     techweek_request_admin({ p_key, p_code, p_name }) {
       check(len(p_key, 16, 64), "admin_requests.person_key");
       check(/^[0-9]{6}$/.test(p_code), "admin_requests.code");

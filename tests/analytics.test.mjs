@@ -223,26 +223,31 @@ const sample = (days) => ({
   searches: [{ q: "claude", times: 5, people: 4 }, { q: "<i>ai</i>", times: 1, people: 1 }],
   hours: [{ hour: 9, visits: 20 }, { hour: 21, visits: 40 }],
 });
-const stats = (t, more = {}) => boot(t, { page: "stats", admins: [KEY], stats: sample, ...more });
+const stats = (t, more = {}) => boot(t, { page: "stats", stats: sample, ...more });
 const cardOf = (x, title) => x.$$(".card").find((c) => x.$("h2", c).firstChild.textContent === title);
 const rowsOf = (x, title) => x.$$("tbody tr", cardOf(x, title)).map((r) => x.$$("td", r).map((c) => c.textContent));
 const barsOf = (x, title) => x.$$(".brow", cardOf(x, title)).map((r) => [x.$(".blabel", r).textContent, x.$(".bval", r).textContent]);
 const range = (x) => x.$$("#range button").map((b) => b.textContent + (b.getAttribute("aria-pressed") === "true" ? "*" : ""));
 
 describe("the numbers page: who may see it", () => {
-  test("a browser that is not an admin is told so and pointed to the pairing page", async (t) => {
-    const x = await stats(t, { admins: [] });
-    assert.match(x.$("#main").textContent, /这台浏览器不是管理员/);
-    assert.equal(x.$("#main a").getAttribute("href"), "./#admin");
+  test("anyone: an ordinary browser gets the numbers without being an admin", async (t) => {
+    const x = await stats(t);
+    assert.equal(x.$$(".tile").length, 6);
     assert.deepEqual(x.rpcsSent("techweek_stats"), [{ p_key: KEY, p_days: 14 }]);
-    assert.equal(x.$$(".tile").length, 0);
+    assert.deepEqual(x.rpcsSent("techweek_is_admin"), []);
   });
 
-  test("a browser that has never opened the site is refused without asking the database", async (t) => {
+  test("a browser that has never opened the site gets them too, and the page gives it no key", async (t) => {
     const x = await stats(t, { key: null });
-    assert.match(x.$("#main").textContent, /这台浏览器不是管理员/);
-    assert.deepEqual(x.calls, []);
+    assert.equal(x.$$(".tile").length, 6);
+    assert.deepEqual(x.rpcsSent("techweek_stats"), [{ p_key: "", p_days: 14 }]);
     assert.equal(x.window.localStorage.getItem("tw.key"), null, "the numbers page must not create a key");
+  });
+
+  test("a database that still answers only admins is named, with the migration that opens it", async (t) => {
+    const x = await stats(t, { stats: null });
+    assert.match(x.$("#main").textContent, /数据还没有对所有人开放.*migration-015-open-stats\.sql/);
+    assert.equal(x.$$(".tile").length, 0);
   });
 
   test("without a database configured it says so and the range buttons are off", async (t) => {

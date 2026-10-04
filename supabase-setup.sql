@@ -282,7 +282,8 @@ begin
   insert into techweek_activity (person_key, action, event_id, props) values (p_key, p_action, p_event, coalesce(p_props, '{}'::jsonb));
 end $$;
 
--- stats.html 用的汇总：最近 p_days 天（最多 90），日期和钟点按旧金山时间，不含管理员自己的浏览器。不是管理员就什么也拿不到。
+-- stats.html 用的汇总：最近 p_days 天（最多 90），日期和钟点按旧金山时间，不含管理员自己的浏览器。
+-- 谁都可以看：里面只有加总后的数字、活动名、来源和搜索词，没有名字，也没有浏览器的 key。p_key 已经不用了，留着是为了不改网页的调用方式。
 create function public.techweek_stats(p_key text, p_days int)
 returns jsonb language sql stable security definer set search_path = public as $$
   with span as (
@@ -297,7 +298,7 @@ returns jsonb language sql stable security definer set search_path = public as $
     where a.created_at >= (span.first_day::timestamp at time zone 'America/Los_Angeles')
       and not exists (select 1 from techweek_admins ad where ad.person_key = a.person_key)
   )
-  select case when exists (select 1 from techweek_admins where person_key = p_key) then jsonb_build_object(
+  select jsonb_build_object(
     'days', (select today - first_day + 1 from span),
     'since', (select min(created_at) from techweek_activity),
     'all_visitors', (select count(distinct a.person_key) from techweek_activity a
@@ -350,7 +351,7 @@ returns jsonb language sql stable security definer set search_path = public as $
         from t where action = 'search' and props->>'q' is not null group by 1 order by 3 desc, 2 desc limit 20) x),
     'hours', (select coalesce(jsonb_agg(jsonb_build_object('hour', hour, 'visits', visits) order by hour), '[]'::jsonb) from (
         select hour, count(*) as visits from t where action = 'visit' group by hour) x)
-  ) end
+  )
 $$;
 
 revoke execute on function public.techweek_track, public.techweek_stats from public;
