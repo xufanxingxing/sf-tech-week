@@ -371,3 +371,11 @@ drop policy "anyone adds events" on public.techweek_events;
 create policy "anyone adds events" on public.techweek_events for insert to anon
   with check (curated = false and source = 'community' and tw_id is null and featured = false and intro is null and topics is null and why is not null);
 -- 主题的数据在 migration-013-topics.sql 里，导入官方日历之后运行。
+
+alter table public.techweek_events add column why_en text check (why_en is null or char_length(why_en) between 1 and 900);
+grant select (why_en) on public.techweek_events to anon;
+
+drop policy "anyone adds events" on public.techweek_events;
+create policy "anyone adds events" on public.techweek_events for insert to anon
+  with check (curated = false and source = 'community' and tw_id is null and featured = false and intro is null and topics is null and why_en is null and why is not null);
+-- 英文理由的数据在 migration-014-english.sql 里。
