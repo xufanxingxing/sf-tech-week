@@ -54,10 +54,10 @@ const EN = {
   "没保存成功，请再试一次。": "Couldn't save. Please try again.",
   "没删掉，请再试一次。": "Couldn't delete. Please try again.",
   "没有找到活动": "No events found",
-  "没有符合所选主题的活动": "No events match the selected topics",
+  "没有符合筛选条件的活动": "No events match the filters",
   "活动列表很快上线，晚点再来看看。": "The event list will be up soon. Check back later.",
   "清除": "Clear",
-  "清除主题筛选": "Clear topic filters",
+  "清除筛选": "Clear filters",
   "点右上角“添加活动”，放上第一个值得去的。": "Use “Add event” at the top right to add the first one worth going to.",
   "现在查不到管理员状态，请刷新再试。": "Couldn't check admin status. Refresh and try again.",
   "现在读不到活动列表": "Can't load the event list right now",
@@ -130,7 +130,8 @@ const EN = {
   "关闭名单": "Close the list",
   "关闭留言": "Close comments",
   "已标记的人": "People who marked this",
-  "按主题筛选": "Filter by topic",
+  "按主题筛选": "Filter by topic", "按城市筛选": "Filter by city",
+  "旧金山": "San Francisco", "半岛·南湾": "Peninsula & South Bay", "东湾": "East Bay", "北湾": "North Bay", "其他": "Other",
   "搜索全部活动": "Search all events",
   "筛选": "Filter",
   "切换到英文": "Switch to English",
@@ -220,6 +221,7 @@ const state = {
   day: null,           // the day shown in "全部"
   query: "",           // what is typed in the "全部" search box
   topics: new Set(),   // topic filters that are switched on; none means no filter
+  cities: new Set(),   // city filters that are switched on; none means no filter
   mine: new Map(),     // event id -> this browser's status on it
   added: new Set(),    // ids of events this browser added, which it may delete
   confirming: null,    // event id awaiting delete confirmation
@@ -264,6 +266,17 @@ const TOPICS = [
   { key: "security", label: "安全/国防", en: "Security/Defense", rx: /security|cyber|defen[sc]e|安全|国防/i },
   { key: "deeptech", label: "Deep Tech", en: "Deep Tech", rx: /deep ?tech|深科技/i },
 ];
+// Where an event is, from its place as written. Checked in this order, since "South San Francisco" is on the peninsula.
+const CITIES = [
+  { key: "virtual", label: "线上", rx: /线上|virtual|online|zoom|remote/i },
+  { key: "peninsula", label: "半岛·南湾", rx: /palo alto|stanford|mountain view|san mateo|hillsborough|menlo park|redwood city|sunnyvale|san jose|santa clara|cupertino|los altos|burlingame|south san francisco|foster city|millbrae|belmont|san carlos|fremont|milpitas|帕罗奥图|斯坦福|山景城|南湾|半岛/i },
+  { key: "eastbay", label: "东湾", rx: /east bay|berkeley|oakland|emeryville|alameda|walnut creek|东湾|伯克利|奥克兰/i },
+  { key: "northbay", label: "北湾", rx: /\bmarin\b|sausalito|mill valley|san rafael|\bnapa\b|sonoma|北湾/i },
+  { key: "sf", label: "旧金山", rx: /san francisco|\bsf\b|soma|fidi|downtown|mission|embarcadero|union square|jackson square|marina|dogpatch|hayes valley|civic center|north beach|salesforce park|rincon hill|golden gate park|south beach|nob hill|nopa|fisherman|alamo square|potrero|duboce|presidio|pacific heights|chinatown|design district|russian hill|cow hollow|telegraph hill|castro|panhandle|haight|ocean beach|sunset|tenderloin|western addition|fillmore|japantown|twin peaks|noe valley|glen park|bernal|bayview|excelsior|treasure island|financial district|richmond district|旧金山|三藩/i },
+  { key: "other", label: "其他" },
+];
+const cityOf = (where) => (CITIES.find((c) => c.rx && c.rx.test(where || "")) || CITIES[CITIES.length - 1]).key;
+const CITY_LABEL = Object.fromEntries(CITIES.map((c) => [c.key, c.label]));
 const TOPIC_LABEL = Object.fromEntries(TOPICS.map((t) => [t.key, t.label]));
 const TOPIC_EN = Object.fromEntries(TOPICS.map((t) => [t.key, t.en]));
 const topicLabel = (k) => (lang === "en" ? TOPIC_EN[k] : TOPIC_LABEL[k]);
@@ -317,7 +330,7 @@ function renderList() {
 
   const list = $("#list"); list.replaceChildren();
   $("#stats").hidden = true; // the count under the tabs, shown once there are events to count
-  $("#topics").hidden = true;
+  $("#topics").hidden = true; $("#cities").hidden = true;
   if (state.status === "loading") { list.append(h("div", { class: "empty", text: tr("正在加载活动…") })); return; }
   if (state.status === "setup") { list.append(h("div", { class: "empty" }, h("strong", { text: tr("网站还在设置中") }), tr("活动列表很快上线，晚点再来看看。"))); return; }
   if (state.status === "unavailable") {
@@ -336,8 +349,10 @@ function renderList() {
   }
 
   const scope = all ? everything() : state.filter === "mine" ? everything().filter((ev) => state.mine.has(ev.id)) : state.events;
-  renderTopics(scope);
-  const events = state.topics.size ? scope.filter((ev) => ev.topics.some((k) => state.topics.has(k))) : scope; // any of the chosen topics
+  const byTopic = (ev) => !state.topics.size || ev.topics.some((k) => state.topics.has(k)); // any of the chosen topics
+  const byCity = (ev) => !state.cities.size || state.cities.has(ev.city);
+  renderTopics(scope.filter(byCity)); renderCities(scope.filter(byTopic)); // each row counts what the other row lets through
+  const events = scope.filter((ev) => byTopic(ev) && byCity(ev));
   $("#stats").textContent = tr("{n} 个活动", { n: events.length });
   $("#stats").hidden = !events.length;
   let sessions = events.flatMap((ev) => ev.sessions.map((s, i) => ({ ev, s, i })));
@@ -357,7 +372,7 @@ function renderList() {
   const shown = sessions.sort((x, y) => (x.s.date + x.s.start + x.ev.name).localeCompare(y.s.date + y.s.start + y.ev.name)).slice(0, cut ? MAX_SHOWN : undefined);
   if (!shown.length) {
     list.append(scope.length && !events.length
-      ? h("div", { class: "empty" }, h("strong", { text: tr("没有符合所选主题的活动") }), h("button", { class: "link", type: "button", text: tr("清除主题筛选"), onclick: clearTopics }))
+      ? h("div", { class: "empty" }, h("strong", { text: tr("没有符合筛选条件的活动") }), h("button", { class: "link", type: "button", text: tr("清除筛选"), onclick: clearFilters }))
       : state.filter === "mine"
       ? h("div", { class: "empty" }, h("strong", { text: tr("你还没标记任何活动") }), tr("在“推荐”或“全部”里点“我会去”“等待通过”或“感兴趣”，这里就是你的日程。"))
       : all ? h("div", { class: "empty" }, h("strong", { text: tr("没有找到活动") }), tr("换个关键词，或者点上面的日期。"))
@@ -395,6 +410,23 @@ function renderTopics(scope) {
   $("#topics").hidden = !chips.length;
 }
 function clearTopics() { state.topics.clear(); render(); }
+
+// The city chips, under the topics, work the same way.
+function renderCities(scope) {
+  const count = new Map();
+  for (const ev of scope) count.set(ev.city, (count.get(ev.city) || 0) + 1);
+  const chips = CITIES.filter((c) => count.has(c.key) || state.cities.has(c.key)).map((c) => h("button", { class: "topic k-city", type: "button",
+    "aria-pressed": String(state.cities.has(c.key)), onclick: () => {
+      const on = !state.cities.delete(c.key);
+      if (on) state.cities.add(c.key);
+      render(); track("city", null, { city: c.key, on });
+    } },
+    icon(PIN), tr(c.label), h("small", { text: String(count.get(c.key) || 0) })));
+  if (state.cities.size) chips.push(h("button", { class: "link", type: "button", text: tr("清除"), onclick: () => { state.cities.clear(); render(); } }));
+  $("#cities").replaceChildren(...chips);
+  $("#cities").hidden = chips.length < 2 && !state.cities.size; // one city means nothing to choose between
+}
+function clearFilters() { state.topics.clear(); state.cities.clear(); render(); }
 
 // Every event this page has: the recommended ones, then calendar ones it has loaded, each once.
 function everything() {
@@ -607,6 +639,7 @@ const toEvent = (e) => ({
   where: e.location, why: e.why, addedBy: e.added_by, curated: e.curated,
   calendar: e.source === "calendar", hosts: e.hosts || "", featured: !!e.featured, intro: e.intro || "", whyEn: e.why_en || "",
   topics: topicsOf(e),
+  city: cityOf(e.location),
   goers: state.goers.get(e.id) || [],
   comments: state.notes.get(e.id) || [],
 });

@@ -171,7 +171,7 @@ describe("laying out the list", () => {
     const a = event(), b = event();
     const x = await boot(t, { name: "Ann", events: [a, b], rsvps: [rsvp(a.id, "Ann", "going", KEY), rsvp(b.id, "Bo", "pending")] });
     assert.equal(x.$("#stats").textContent, "2 个活动");
-    assert.equal(x.$("#topics").nextElementSibling, x.$("#stats"));
+    assert.equal(x.$("#cities").nextElementSibling, x.$("#stats"));
     await x.click(x.$("#tabMine"));
     assert.equal(x.$("#stats").textContent, "1 个活动");
     assert.doesNotMatch(x.$(".top").textContent, /个活动|已标记/);
@@ -280,6 +280,91 @@ describe("the tab in the address", () => {
     const y = await three(t, { hash: "?lang=en&tab=mine" });
     assert.deepEqual(tabs(y), [false, false, true]);
     assert.equal(y.$("#tabMine").textContent, "My marks");
+  });
+});
+
+describe("cities", () => {
+  const chips = (x) => x.$$("#cities .topic").map((b) => b.textContent + (b.getAttribute("aria-pressed") === "true" ? "*" : ""));
+  const chip = (x, label) => x.$$("#cities .topic").find((b) => b.textContent.startsWith(label));
+  function spread(t, more = {}) {
+    return boot(t, { ...more, events: [
+      event({ name: "Soma", location: "SOMA", topics: ["agent"] }),
+      event({ name: "Approved", location: "Downtown, San Francisco（具体地址报名通过后显示）", topics: ["founder"] }),
+      event({ name: "Stanford", location: "Stanford", topics: ["founder"] }),
+      event({ name: "Berkeley", location: "East Bay", topics: [] }),
+      event({ name: "Online", location: "线上", topics: ["agent"] }),
+      event({ name: "Somewhere", location: "TBD", topics: [] }),
+      ...(more.events || []),
+    ] });
+  }
+
+  test("under the topics sits a chip per city the tab's events are in, in a fixed order, with how many", async (t) => {
+    const x = await spread(t);
+    assert.deepEqual(chips(x), ["线上1", "半岛·南湾1", "东湾1", "旧金山2", "其他1"]);
+    assert.equal(x.$("#topics").nextElementSibling, x.$("#cities"));
+    assert.equal(x.$("#cities").nextElementSibling, x.$("#stats"));
+  });
+
+  test("a place is read for its city: neighborhoods and the approval note mean San Francisco, towns down the peninsula are one group", async (t) => {
+    const x = await boot(t, { events: ["Palo Alto", "Mountain View", "San Mateo", "Hillsborough", "South San Francisco"].map((location) => event({ location })) });
+    assert.deepEqual(chips(x), ["半岛·南湾5"]);
+    assert.equal(x.$("#cities").hidden, true, "nothing to choose between when every event is in one city");
+  });
+
+  test("pressing a city shows only its events; several cities show any of them; pressing again switches off", async (t) => {
+    const x = await spread(t);
+    await x.click(chip(x, "旧金山"));
+    assert.deepEqual(titles(x), ["Approved", "Soma"]);
+    assert.equal(x.$("#stats").textContent, "2 个活动");
+    await x.click(chip(x, "线上"));
+    assert.deepEqual(titles(x), ["Approved", "Online", "Soma"]);
+    await x.click(chip(x, "旧金山"));
+    assert.deepEqual(titles(x), ["Online"]);
+    await x.click(chip(x, "线上"));
+    assert.equal(x.$$(".event").length, 6);
+  });
+
+  test("city and topic filters work together, and each row counts only what the other lets through", async (t) => {
+    const x = await spread(t);
+    await x.click(chip(x, "旧金山"));
+    assert.deepEqual(x.$$("#topics .topic").map((b) => b.textContent), ["Agent1", "创业1"]);
+    await x.click(x.$$("#topics .topic").find((b) => b.textContent.startsWith("Agent")));
+    assert.deepEqual(titles(x), ["Soma"]);
+    assert.deepEqual(chips(x), ["线上1", "旧金山1*"]);
+    await x.click(chip(x, "线上"));
+    assert.deepEqual(titles(x), ["Online", "Soma"]);
+  });
+
+  test("a chosen city carries over to the other tabs; when it leaves nothing there it says so, and “清除筛选” switches off both rows", async (t) => {
+    const soma = event({ name: "Soma", location: "SOMA", topics: ["agent"] });
+    const x = await boot(t, { name: "stella", events: [soma, event({ name: "Berkeley", location: "East Bay" })], rsvps: [rsvp(soma.id, "stella", "going", KEY)] });
+    await x.click(x.$$("#topics .topic").find((b) => b.textContent.startsWith("Agent")));
+    await x.click(chip(x, "旧金山"));
+    assert.deepEqual(titles(x), ["Soma"]);
+    await x.click(x.$("#tabMine"));
+    assert.deepEqual(titles(x), ["Soma"]);
+    await x.click(x.$("#tabPicks"));
+    await x.click(x.$$("#topics .topic").find((b) => b.textContent.startsWith("Agent")));
+    await x.click(chip(x, "旧金山"));
+    await x.click(chip(x, "东湾"));
+    assert.deepEqual(chips(x), ["旧金山1", "东湾1*"]);
+    await x.click(x.$("#tabMine"));
+    assert.deepEqual(chips(x), ["旧金山1", "东湾0*"]);
+    assert.match(listText(x), /没有符合筛选条件的活动/);
+    await x.click(x.button(x.$("#list"), "清除筛选"));
+    assert.deepEqual(titles(x), ["Soma"]);
+    assert.deepEqual([x.$$("#topics [aria-pressed=true]").length, x.$$("#cities [aria-pressed=true]").length], [0, 0]);
+  });
+
+  test("the chips are English when the page is", async (t) => {
+    const x = await spread(t, { hash: "?lang=en" });
+    assert.deepEqual(chips(x), ["Virtual1", "Peninsula & South Bay1", "East Bay1", "San Francisco2", "Other1"]);
+  });
+
+  test("pressing a city is recorded", async (t) => {
+    const x = await spread(t);
+    await x.click(chip(x, "东湾"));
+    assert.deepEqual(x.tracked("city").map((c) => c[2]), [{ tab: "picks", city: "eastbay", on: true }]);
   });
 });
 
@@ -519,8 +604,8 @@ describe("topics", () => {
     await x.click(chip(x, "黑客松"));
     await x.click(x.$("#tabMine"));
     assert.deepEqual(chips(x), ["创业1", "黑客松0*"]);
-    assert.match(listText(x), /没有符合所选主题的活动/);
-    await x.click(x.button(x.$("#list"), "清除主题筛选"));
+    assert.match(listText(x), /没有符合筛选条件的活动/);
+    await x.click(x.button(x.$("#list"), "清除筛选"));
     assert.deepEqual(titles(x), ["Mine"]);
   });
 
