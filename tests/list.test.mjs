@@ -347,9 +347,9 @@ describe("cities", () => {
     await x.click(x.$$("#topics .topic").find((b) => b.textContent.startsWith("Agent")));
     await x.click(chip(x, "旧金山"));
     await x.click(chip(x, "东湾"));
-    assert.deepEqual(chips(x), ["旧金山1", "东湾1*"]);
+    assert.deepEqual(chips(x), ["东湾1*", "旧金山1"]);
     await x.click(x.$("#tabMine"));
-    assert.deepEqual(chips(x), ["旧金山1", "东湾0*"]);
+    assert.deepEqual(chips(x), ["东湾0*", "旧金山1"]);
     assert.match(listText(x), /没有符合筛选条件的活动/);
     await x.click(x.button(x.$("#list"), "清除筛选"));
     assert.deepEqual(titles(x), ["Soma"]);
