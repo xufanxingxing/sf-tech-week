@@ -308,7 +308,7 @@ describe("cities", () => {
   test("a place is read for its city: neighborhoods and the approval note mean San Francisco, towns down the peninsula are one group", async (t) => {
     const x = await boot(t, { events: ["Palo Alto", "Mountain View", "San Mateo", "Hillsborough", "South San Francisco"].map((location) => event({ location })) });
     assert.deepEqual(chips(x), ["半岛·南湾5"]);
-    assert.equal(x.$("#cities").hidden, true, "nothing to choose between when every event is in one city");
+    assert.equal(x.$("#cities").hidden, false, "the row shows even when every event is in one city");
   });
 
   test("pressing a city shows only its events; several cities show any of them; pressing again switches off", async (t) => {

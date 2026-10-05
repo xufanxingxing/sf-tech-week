@@ -424,7 +424,7 @@ function renderCities(scope) {
     icon(PIN), tr(c.label), h("small", { text: String(count.get(c.key) || 0) })));
   if (state.cities.size) chips.push(h("button", { class: "link", type: "button", text: tr("清除"), onclick: () => { state.cities.clear(); render(); } }));
   $("#cities").replaceChildren(...chips);
-  $("#cities").hidden = chips.length < 2 && !state.cities.size; // one city means nothing to choose between
+  $("#cities").hidden = !chips.length;
 }
 function clearFilters() { state.topics.clear(); state.cities.clear(); render(); }
 
